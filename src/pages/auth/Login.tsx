@@ -27,7 +27,7 @@ export default function Login() {
 
   return (
     <AuthLayout
-      illustration={<AuthIllustration alt="User login illustration" />}
+      illustration={<AuthIllustration src="/assets/login.png" alt="User login illustration" />}
     >
       <AuthCard description="Welcome back! Please enter your details.">
         <form onSubmit={onSubmit} className="space-y-5">

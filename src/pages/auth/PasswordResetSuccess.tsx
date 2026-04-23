@@ -9,7 +9,7 @@ export default function PasswordResetSuccess() {
 
   return (
     <AuthLayout
-      illustration={<AuthIllustration alt="Password reset success illustration" />}
+      illustration={<AuthIllustration src="/assets/check.png" alt="Password reset success illustration" />}
     >
       <AuthCard
         title="Password reset"

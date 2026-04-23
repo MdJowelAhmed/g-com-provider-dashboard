@@ -94,7 +94,7 @@ export default function Register() {
   const handleSkipStripe = () => setStep(4)
 
   const illustration = useMemo(
-    () => <AuthIllustration alt="Provider registration illustration" />,
+    () => <AuthIllustration src="/assets/signup.png" alt="Provider registration illustration" />,
     [],
   )
 

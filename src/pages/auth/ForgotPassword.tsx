@@ -18,7 +18,7 @@ export default function ForgotPassword() {
 
   return (
     <AuthLayout
-      illustration={<AuthIllustration  alt="Forgot password illustration" />}
+      illustration={<AuthIllustration src="/assets/forgot.png" alt="Forgot password illustration" />}
     >
       <AuthCard
         title="Forgot password?"

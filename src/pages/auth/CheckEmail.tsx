@@ -14,7 +14,7 @@ export default function CheckEmail() {
 
   return (
     <AuthLayout
-      illustration={<AuthIllustration alt="Check email illustration" />}
+      illustration={<AuthIllustration src="/assets/check.png" alt="Check email illustration" />}
     >
       <AuthCard
         title="Check your email"

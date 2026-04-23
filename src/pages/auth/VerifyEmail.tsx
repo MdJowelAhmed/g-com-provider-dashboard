@@ -109,7 +109,7 @@ export default function VerifyEmail() {
     : 'Enter the 6-digit code we sent to your email.'
 
   return (
-    <AuthLayout illustration={<AuthIllustration alt="Verify email illustration" />}>
+    <AuthLayout illustration={<AuthIllustration src="/assets/verify.png" alt="Verify email illustration" />}>
       <AuthCard title={title} description={description} >
         <form onSubmit={onSubmit} className="space-y-5">
           <div>

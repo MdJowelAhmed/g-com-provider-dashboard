@@ -31,7 +31,7 @@ export default function SetNewPassword() {
 
   return (
     <AuthLayout
-      illustration={<AuthIllustration alt="Reset password illustration" />}
+      illustration={<AuthIllustration src="/assets/reset.png" alt="Reset password illustration" />}
     >
       <AuthCard
         title="Set new password"
