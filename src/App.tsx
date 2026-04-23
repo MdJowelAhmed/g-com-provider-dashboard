@@ -2,7 +2,7 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import Login from './pages/auth/Login'
 import Register from './pages/auth/Register'
 import ForgotPassword from './pages/auth/ForgotPassword'
-import CheckEmail from './pages/auth/CheckEmail'
+import VerifyEmail from './pages/auth/VerifyEmail'
 import SetNewPassword from './pages/auth/SetNewPassword'
 import PasswordResetSuccess from './pages/auth/PasswordResetSuccess'
 import DashboardLayout from './layouts/DashboardLayout'
@@ -18,7 +18,7 @@ export default function App() {
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
-      <Route path="/check-email" element={<CheckEmail />} />
+      <Route path="/verify-email" element={<VerifyEmail />} />
       <Route path="/reset-password" element={<SetNewPassword />} />
       <Route path="/password-reset-success" element={<PasswordResetSuccess />} />
 

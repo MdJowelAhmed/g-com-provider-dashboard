@@ -14,7 +14,7 @@ export default function PasswordResetSuccess() {
       <AuthCard
         title="Password reset"
         description="Your password has been successfully reset. Click below to log in magically."
-        bordered
+        
       >
         <PrimaryButton type="button" onClick={() => navigate('/login')}>
           Continue

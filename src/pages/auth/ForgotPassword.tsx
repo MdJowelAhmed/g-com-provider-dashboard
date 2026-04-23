@@ -13,17 +13,17 @@ export default function ForgotPassword() {
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault()
-    navigate('/check-email', { state: { email } })
+    navigate('/verify-email', { state: { email, purpose: 'forgot' } })
   }
 
   return (
     <AuthLayout
-      illustration={<AuthIllustration alt="Forgot password illustration" />}
+      illustration={<AuthIllustration  alt="Forgot password illustration" />}
     >
       <AuthCard
         title="Forgot password?"
         description="No worries, we'll send you reset instructions."
-        bordered
+        
       >
         <form onSubmit={onSubmit} className="space-y-5">
           <FormField

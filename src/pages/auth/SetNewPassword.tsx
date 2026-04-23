@@ -36,7 +36,7 @@ export default function SetNewPassword() {
       <AuthCard
         title="Set new password"
         description="Your new password must be different to previously used passwords."
-        bordered
+        
       >
         <form onSubmit={onSubmit} className="space-y-5">
           <PasswordField
