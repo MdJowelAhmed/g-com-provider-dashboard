@@ -1,6 +1,8 @@
-import { NavLink } from 'react-router-dom'
+import { NavLink, useLocation } from 'react-router-dom'
 import { LogOut } from 'lucide-react'
 import type { NavItem, RoleMeta } from '../../config/roleConfig'
+import { useAuth } from '../../context/AuthContext'
+import { filterNavItemsForUser } from '../../modules/permissions/navFilter'
 import GcomLogo from '../auth/GcomLogo'
 
 type Props = {
@@ -9,7 +11,9 @@ type Props = {
 }
 
 export default function Sidebar({ meta, onLogout }: Props) {
+  const { user } = useAuth()
   const RoleIcon = meta.icon
+  const navItems = user ? filterNavItemsForUser(meta.navItems, user) : meta.navItems
 
   return (
     <aside className="flex h-screen w-64 shrink-0 flex-col border-r border-surface-border bg-surface-sidebar">
@@ -24,7 +28,7 @@ export default function Sidebar({ meta, onLogout }: Props) {
       </div>
 
       <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-2">
-        {meta.navItems.map((item) => (
+        {navItems.map((item) => (
           <SidebarLink key={item.path || 'overview'} item={item} roleKey={meta.role} />
         ))}
       </nav>
@@ -43,21 +47,26 @@ export default function Sidebar({ meta, onLogout }: Props) {
 }
 
 function SidebarLink({ item, roleKey }: { item: NavItem; roleKey: string }) {
+  const location = useLocation()
   const Icon = item.icon
   const base = `/dashboard/${roleKey}`
   const to = item.path ? `${base}/${item.path}` : base
+  const isLegal = item.path === 'legal'
+  const legalPrefix = `${base}/legal`
 
   return (
     <NavLink
       to={to}
       end={item.path === ''}
-      className={({ isActive }) =>
-        `flex h-10 items-center gap-3 rounded-md px-3 text-sm transition-colors ${
-          isActive
+      className={({ isActive }) => {
+        const active =
+          isActive || (isLegal && location.pathname.startsWith(`${legalPrefix}`))
+        return `flex h-10 items-center gap-3 rounded-md px-3 text-sm transition-colors ${
+          active
             ? 'bg-brand text-white'
             : 'text-gray-300 hover:bg-surface-elevated hover:text-white'
         }`
-      }
+      }}
     >
       <Icon size={18} /> {item.label}
     </NavLink>

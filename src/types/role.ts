@@ -1,9 +1,9 @@
-export type Role = 'service' | 'stay' | 'dine' | 'shops' | 'events'
+export type Role = 'services' | 'stay' | 'dine' | 'shops' | 'events'
 
-export const ROLES: Role[] = ['service', 'stay', 'dine', 'shops', 'events']
+export const ROLES: Role[] = ['services', 'stay', 'dine', 'shops', 'events']
 
 export const ROLE_LABELS: Record<Role, string> = {
-  service: 'Service Panel',
+  services: 'Service Provider',
   stay: 'Stay',
   dine: 'Dine',
   shops: 'Shops',

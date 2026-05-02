@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, Navigate } from 'react-router-dom'
 import {
   Area,
   AreaChart,
@@ -20,8 +20,12 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { ROLE_META } from '../../config/roleConfig'
+import { hasNavAccess, hasPermission } from '../../modules/permissions/resolver'
+import { navItemToPermissionId } from '../../modules/permissions/navPermissionMap'
+import { OVERVIEW_UI } from '../../config/overviewUiConfig'
 import { ROLE_MOCK } from '../../data/mockData'
 import { OVERVIEW_DATA } from '../../data/overviewData'
+import type { Role } from '../../types/role'
 import PageHeader from '../../components/dashboard/PageHeader'
 import StatCard from '../../components/dashboard/StatCard'
 
@@ -67,6 +71,15 @@ export default function Overview() {
   if (!user) return null
 
   const meta = ROLE_META[user.role]
+
+  if (!hasNavAccess(user, '')) {
+    const fallback = meta.navItems.find((item) => hasPermission(user, navItemToPermissionId(item)))
+    if (fallback && fallback.path !== '') {
+      return <Navigate to={`/dashboard/${user.role}/${fallback.path}`} replace />
+    }
+  }
+
+  const ui = OVERVIEW_UI[user.role]
   const mock = ROLE_MOCK[user.role]
   const overview = OVERVIEW_DATA[user.role]
   const RoleIcon = meta.icon
@@ -103,7 +116,7 @@ export default function Overview() {
     <div>
       <PageHeader
         title={`Welcome, ${user.businessName || user.ownerName}`}
-        description={`${meta.label} dashboard — here's what's happening today.`}
+        description={ui.subtitle}
         actions={<RangeToggle value={range} onChange={setRange} />}
       />
 
@@ -144,21 +157,21 @@ export default function Overview() {
         <div className="rounded-xl border border-surface-border bg-surface-card p-5 lg:col-span-2">
           <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
             <div>
-              <div className="text-sm font-semibold text-gray-100">Revenue & orders</div>
+              <div className="text-sm font-semibold text-gray-100">{ui.chartTitle}</div>
               <div className="text-xs text-gray-400">{RANGE_LABEL[range]}</div>
             </div>
             <div className="flex items-center gap-4 text-sm">
               <Metric
-                label="Revenue"
+                label={ui.primaryMetricLabel}
                 value={formatMoney(periodTotals.revenue)}
                 delta={periodTotals.revenueDelta}
               />
               <Metric
-                label="Orders"
+                label={ui.secondaryMetricLabel}
                 value={formatNum(periodTotals.orders)}
                 delta={periodTotals.orderDelta}
               />
-              <Metric label="AOV" value={formatMoney(periodTotals.aov)} />
+              <Metric label={ui.tertiaryMetricLabel} value={formatMoney(periodTotals.aov)} />
             </div>
           </div>
           <div className="h-64">
@@ -212,8 +225,8 @@ export default function Overview() {
                   labelFormatter={(v) => shortDate(String(v))}
                   formatter={(value, name) =>
                     name === 'revenue'
-                      ? [formatMoney(Number(value)), 'Revenue']
-                      : [formatNum(Number(value)), 'Orders']
+                      ? [formatMoney(Number(value)), ui.revenueSeriesName]
+                      : [formatNum(Number(value)), ui.volumeSeriesName]
                   }
                 />
                 <Area
@@ -243,7 +256,9 @@ export default function Overview() {
       <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
         <div className="rounded-xl border border-surface-border bg-surface-card p-5">
           <div className="mb-1 text-sm font-semibold text-gray-100">Status breakdown</div>
-          <div className="mb-3 text-xs text-gray-400">{totalStatus} records this period</div>
+          <div className="mb-3 text-xs text-gray-400">
+            {totalStatus} {ui.statusRecordsHint} this period
+          </div>
           <div className="flex items-center gap-4">
             <div className="h-40 w-40 shrink-0">
               <ResponsiveContainer width="100%" height="100%">
@@ -296,8 +311,8 @@ export default function Overview() {
         </div>
 
         <div className="rounded-xl border border-surface-border bg-surface-card p-5">
-          <div className="mb-1 text-sm font-semibold text-gray-100">Top performers</div>
-          <div className="mb-4 text-xs text-gray-400">Revenue leaders this period</div>
+          <div className="mb-1 text-sm font-semibold text-gray-100">{ui.topPerformersTitle}</div>
+          <div className="mb-4 text-xs text-gray-400">{ui.topPerformersHint}</div>
           <ul className="space-y-3 text-sm">
             {overview.topItems.map((it, idx) => (
               <li key={it.name} className="flex items-center gap-3">
@@ -306,7 +321,9 @@ export default function Overview() {
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="truncate font-medium text-gray-100">{it.name}</div>
-                  <div className="text-xs text-gray-500">{it.units} sold</div>
+                  <div className="text-xs text-gray-500">
+                    {formatNum(it.units)} {ui.topUnitLabel}
+                  </div>
                 </div>
                 <div className="text-right">
                   <div className="font-medium text-gray-100">{formatMoney(it.revenue)}</div>
@@ -380,8 +397,8 @@ function Metric({
   )
 }
 
-function PayoutCard({ role }: { role: string }) {
-  const payout = OVERVIEW_DATA[role as keyof typeof OVERVIEW_DATA].payout
+function PayoutCard({ role }: { role: Role }) {
+  const payout = OVERVIEW_DATA[role].payout
   return (
     <div className="rounded-xl border border-surface-border bg-surface-card p-5">
       <div className="mb-1 flex items-center justify-between">

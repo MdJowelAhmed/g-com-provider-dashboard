@@ -8,7 +8,11 @@ import PasswordResetSuccess from './pages/auth/PasswordResetSuccess'
 import DashboardLayout from './layouts/DashboardLayout'
 import Overview from './pages/dashboard/Overview'
 import ListPage from './pages/dashboard/ListPage'
+import LegalHubPage from './pages/dashboard/legal/LegalHubPage'
+import LegalDocumentPage from './pages/dashboard/legal/LegalDocumentPage'
 import ProtectedRoute from './routing/ProtectedRoute'
+import { AUTH_STORAGE_KEYS } from './auth/session'
+import { getDashboardPath, normalizeUserRole } from './routing/roleRedirect'
 
 export default function App() {
   return (
@@ -25,6 +29,8 @@ export default function App() {
       <Route path="/dashboard/:role" element={<ProtectedRoute />}>
         <Route element={<DashboardLayout />}>
           <Route index element={<Overview />} />
+          <Route path="legal" element={<LegalHubPage />} />
+          <Route path="legal/:docSlug" element={<LegalDocumentPage />} />
           <Route path=":tab" element={<ListPage />} />
         </Route>
       </Route>
@@ -37,12 +43,13 @@ export default function App() {
 }
 
 function DashboardRedirect() {
-  const raw = localStorage.getItem('gcom.currentUser')
   try {
-    const user = raw ? JSON.parse(raw) : null
-    if (user?.role) return <Navigate to={`/dashboard/${user.role}`} replace />
+    const raw = localStorage.getItem(AUTH_STORAGE_KEYS.currentUser)
+    if (!raw) return <Navigate to="/login" replace />
+    const parsed = JSON.parse(raw) as { role?: unknown }
+    const role = normalizeUserRole(parsed.role)
+    return <Navigate to={getDashboardPath(role)} replace />
   } catch {
-    // ignore
+    return <Navigate to="/login" replace />
   }
-  return <Navigate to="/login" replace />
 }

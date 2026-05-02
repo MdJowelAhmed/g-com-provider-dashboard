@@ -13,6 +13,12 @@ import {
   BookOpen,
   Package,
   Banknote,
+  MessageSquare,
+  Megaphone,
+  LifeBuoy,
+  Settings,
+  UserCog,
+  Scale,
   type LucideProps,
 } from 'lucide-react'
 import type { Role } from '../types/role'
@@ -31,10 +37,16 @@ export type FieldDef = {
   colSpan?: 1 | 2
 }
 
+/**
+ * Single source for sidebar + controller permissions.
+ * `path` is the URL segment under `/dashboard/:role/:path` (empty = overview).
+ * `permissionId` overrides the default `nav.<path>` when the URL and permission key differ.
+ */
 export type NavItem = {
   path: string
   label: string
   icon: IconType
+  permissionId?: string
 }
 
 export type RoleMeta = {
@@ -63,8 +75,8 @@ const descriptionField: FieldDef = {
 }
 
 export const ROLE_META: Record<Role, RoleMeta> = {
-  service: {
-    role: 'service',
+  services: {
+    role: 'services',
     label: 'Service Provider',
     tagline: 'Home services, repairs, cleaning & more',
     description: 'Offer on-demand or scheduled services to customers in your area.',
@@ -81,6 +93,12 @@ export const ROLE_META: Record<Role, RoleMeta> = {
       { path: 'services', label: 'Services', icon: Wrench },
       { path: 'bookings', label: 'Bookings', icon: ClipboardList },
       { path: 'customers', label: 'Customers', icon: Users },
+      { path: 'messages', label: 'Messages', icon: MessageSquare },
+      { path: 'posts', label: 'Posts', icon: Megaphone },
+      { path: 'support', label: 'Support', icon: LifeBuoy },
+      { path: 'legal', label: 'Legal', icon: Scale },
+      { path: 'settings', label: 'Settings', icon: Settings },
+      { path: 'controllers', label: 'Controllers', icon: UserCog },
       { path: 'withdraw', label: 'Withdraw', icon: Banknote },
     ],
   },
@@ -102,8 +120,14 @@ export const ROLE_META: Record<Role, RoleMeta> = {
     navItems: [
       { path: '', label: 'Overview', icon: LayoutDashboard },
       { path: 'rooms', label: 'Rooms', icon: BedDouble },
-      { path: 'bookings', label: 'Bookings', icon: CalendarDays },
+      { path: 'reservations', label: 'Reservations', icon: CalendarDays },
       { path: 'guests', label: 'Guests', icon: Users },
+      { path: 'messages', label: 'Messages', icon: MessageSquare },
+      { path: 'posts', label: 'Posts', icon: Megaphone },
+      { path: 'support', label: 'Support', icon: LifeBuoy },
+      { path: 'legal', label: 'Legal', icon: Scale },
+      { path: 'settings', label: 'Settings', icon: Settings },
+      { path: 'controllers', label: 'Controllers', icon: UserCog },
       { path: 'withdraw', label: 'Withdraw', icon: Banknote },
     ],
   },
@@ -124,6 +148,12 @@ export const ROLE_META: Record<Role, RoleMeta> = {
       { path: '', label: 'Overview', icon: LayoutDashboard },
       { path: 'menu', label: 'Menu', icon: BookOpen },
       { path: 'orders', label: 'Orders', icon: ClipboardList },
+      { path: 'messages', label: 'Messages', icon: MessageSquare },
+      { path: 'posts', label: 'Posts', icon: Megaphone },
+      { path: 'support', label: 'Support', icon: LifeBuoy },
+      { path: 'legal', label: 'Legal', icon: Scale },
+      { path: 'settings', label: 'Settings', icon: Settings },
+      { path: 'controllers', label: 'Controllers', icon: UserCog },
       { path: 'withdraw', label: 'Withdraw', icon: Banknote },
     ],
   },
@@ -145,6 +175,12 @@ export const ROLE_META: Record<Role, RoleMeta> = {
       { path: 'products', label: 'Products', icon: Package },
       { path: 'orders', label: 'Orders', icon: ShoppingBag },
       { path: 'customers', label: 'Customers', icon: Users },
+      { path: 'messages', label: 'Messages', icon: MessageSquare },
+      { path: 'posts', label: 'Posts', icon: Megaphone },
+      { path: 'support', label: 'Support', icon: LifeBuoy },
+      { path: 'legal', label: 'Legal', icon: Scale },
+      { path: 'settings', label: 'Settings', icon: Settings },
+      { path: 'controllers', label: 'Controllers', icon: UserCog },
       { path: 'withdraw', label: 'Withdraw', icon: Banknote },
     ],
   },
@@ -166,6 +202,12 @@ export const ROLE_META: Record<Role, RoleMeta> = {
       { path: 'events', label: 'Events', icon: CalendarDays },
       { path: 'tickets', label: 'Tickets', icon: Ticket },
       { path: 'attendees', label: 'Attendees', icon: Users },
+      { path: 'messages', label: 'Messages', icon: MessageSquare },
+      { path: 'posts', label: 'Posts', icon: Megaphone },
+      { path: 'support', label: 'Support', icon: LifeBuoy },
+      { path: 'legal', label: 'Legal', icon: Scale },
+      { path: 'settings', label: 'Settings', icon: Settings },
+      { path: 'controllers', label: 'Controllers', icon: UserCog },
       { path: 'withdraw', label: 'Withdraw', icon: Banknote },
     ],
   },

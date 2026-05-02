@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import {
   Drawer,
   Form,
@@ -11,7 +11,13 @@ import {
   Divider,
   Button,
   Space,
+  Tooltip,
 } from 'antd'
+import { motion } from 'framer-motion'
+import { HelpCircle } from 'lucide-react'
+import { useNavigate, useParams } from 'react-router-dom'
+import { EVENT_CAPACITY_PLAN_LIMIT } from './capacityPlan'
+import EventCapacityUpgradeModal from './components/EventCapacityUpgradeModal'
 import {
   EVENT_CATEGORIES,
   EVENT_TYPE_OPTIONS,
@@ -103,8 +109,14 @@ export default function EventFormDrawer({
   onSubmit,
 }: Props) {
   const [form] = Form.useForm<FormValues>()
+  const navigate = useNavigate()
+  const { role } = useParams<{ role: string }>()
+  const [upgradeModalOpen, setUpgradeModalOpen] = useState(false)
   const eventType = Form.useWatch('eventType', form)
   const pricingType = Form.useWatch('pricingType', form)
+  const maxCapacityWatch = Form.useWatch('maxCapacity', form)
+  const capacityExceeded =
+    maxCapacityWatch != null && Number(maxCapacityWatch) > EVENT_CAPACITY_PLAN_LIMIT
 
   useEffect(() => {
     if (!open) return
@@ -124,7 +136,20 @@ export default function EventFormDrawer({
     }
   }, [open, mode, initial, form])
 
+  const handleContactAdmin = () => {
+    setUpgradeModalOpen(false)
+    if (role) {
+      navigate(`/dashboard/${role}/support`)
+    }
+  }
+
   const handleOk = async () => {
+    const rawMax = form.getFieldValue('maxCapacity') as number | null | undefined
+    if (rawMax != null && Number(rawMax) > EVENT_CAPACITY_PLAN_LIMIT) {
+      setUpgradeModalOpen(true)
+      return
+    }
+
     const values = await form.validateFields()
     onSubmit({
       ...values,
@@ -143,22 +168,61 @@ export default function EventFormDrawer({
   const isPaid = pricingType === 'paid'
 
   return (
-    <Drawer
-      open={open}
-      title={mode === 'edit' ? 'Edit event' : 'Create event'}
-      onClose={onCancel}
-      width={800}
-      placement="right"
-      destroyOnHidden
-      footer={
-        <Space style={{ display: 'flex', justifyContent: 'flex-end', width: '100%' }}>
-          <Button onClick={onCancel}>Cancel</Button>
-          <Button type="primary" onClick={handleOk}>
-            {mode === 'edit' ? 'Save changes' : 'Create event'}
-          </Button>
-        </Space>
-      }
-    >
+    <>
+      <EventCapacityUpgradeModal
+        open={upgradeModalOpen}
+        onCancel={() => setUpgradeModalOpen(false)}
+        onContactAdmin={handleContactAdmin}
+        planLimit={EVENT_CAPACITY_PLAN_LIMIT}
+      />
+      <Drawer
+        open={open}
+        title={mode === 'edit' ? 'Edit event' : 'Create event'}
+        onClose={onCancel}
+        width={800}
+        placement="right"
+        destroyOnHidden
+        footer={
+          <div
+            style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              width: '100%',
+              gap: 12,
+            }}
+          >
+            <span className="min-h-[32px]">
+              {capacityExceeded ? (
+                <button
+                  type="button"
+                  onClick={() => setUpgradeModalOpen(true)}
+                  className="text-sm font-medium text-brand underline-offset-2 transition hover:text-brand-hover hover:underline"
+                >
+                  Capacity upgrade required — contact admin
+                </button>
+              ) : null}
+            </span>
+            <Space>
+              <Button onClick={onCancel}>Cancel</Button>
+              <Tooltip
+                title={
+                  capacityExceeded
+                    ? `Reduce maximum capacity to ${EVENT_CAPACITY_PLAN_LIMIT} or below, or contact admin for an upgrade.`
+                    : undefined
+                }
+              >
+                <span className={capacityExceeded ? 'inline-block' : undefined}>
+                  <Button type="primary" onClick={handleOk} disabled={capacityExceeded}>
+                    {mode === 'edit' ? 'Save changes' : 'Create event'}
+                  </Button>
+                </span>
+              </Tooltip>
+            </Space>
+          </div>
+        }
+      >
       <Form
         form={form}
         layout="vertical"
@@ -374,7 +438,38 @@ export default function EventFormDrawer({
           <Col span={8}>
             <Form.Item
               name="maxCapacity"
-              label="Maximum capacity"
+              validateStatus={capacityExceeded ? 'error' : undefined}
+              label={
+                <span className="inline-flex items-center gap-2">
+                  Maximum capacity
+                  <Tooltip
+                    title={`Standard plans include up to ${EVENT_CAPACITY_PLAN_LIMIT} attendees. Contact admin for higher limits.`}
+                  >
+                    <HelpCircle
+                      size={14}
+                      className="cursor-help text-gray-500 hover:text-gray-400"
+                      aria-hidden
+                    />
+                  </Tooltip>
+                </span>
+              }
+              help={
+                capacityExceeded ? (
+                  <motion.span
+                    initial={{ opacity: 0, y: -4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.22 }}
+                    className="block text-[13px] text-accent-amber"
+                  >
+                    Exceeds your workspace limit ({EVENT_CAPACITY_PLAN_LIMIT} attendees). Lower the
+                    capacity or contact admin to upgrade.
+                  </motion.span>
+                ) : (
+                  <span className="text-[12px] text-gray-600">
+                    Your current event capacity limit is {EVENT_CAPACITY_PLAN_LIMIT} attendees.
+                  </span>
+                )
+              }
               rules={[{ required: true, message: 'Enter maximum capacity' }]}
             >
               <InputNumber min={1} style={{ width: '100%' }} />
@@ -481,5 +576,6 @@ export default function EventFormDrawer({
         </Row>
       </Form>
     </Drawer>
+    </>
   )
 }

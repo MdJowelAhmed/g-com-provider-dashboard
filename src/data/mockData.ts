@@ -9,9 +9,9 @@ import {
   CalendarDays,
   UtensilsCrossed,
   ShoppingBag,
-  Package,
   Ticket,
   Wrench,
+  ListTodo,
 } from 'lucide-react'
 import type { Role } from '../types/role'
 
@@ -38,11 +38,11 @@ type RoleMock = {
 }
 
 export const ROLE_MOCK: Record<Role, RoleMock> = {
-  service: {
+  services: {
     stats: [
-      { label: 'Revenue (30d)', value: '$4,820', delta: '+12.4%', trend: 'up', icon: DollarSign },
+      { label: 'Service revenue (30d)', value: '$4,820', delta: '+12.4%', trend: 'up', icon: DollarSign },
       { label: 'Active bookings', value: '28', delta: '+5', trend: 'up', icon: ClipboardList },
-      { label: 'Customers', value: '142', delta: '+8.2%', trend: 'up', icon: Users },
+      { label: 'Open requests', value: '14', delta: '+3', trend: 'up', icon: ListTodo },
       { label: 'Avg. rating', value: '4.7', delta: '+0.1', trend: 'up', icon: Star },
     ],
     tables: {
@@ -101,9 +101,9 @@ export const ROLE_MOCK: Record<Role, RoleMock> = {
 
   stay: {
     stats: [
-      { label: 'Revenue (30d)', value: '$18,450', delta: '+9.1%', trend: 'up', icon: DollarSign },
-      { label: 'Occupancy', value: '78%', delta: '+4%', trend: 'up', icon: BedDouble },
-      { label: 'Bookings', value: '64', delta: '+12', trend: 'up', icon: CalendarDays },
+      { label: 'Hotel revenue (30d)', value: '$18,450', delta: '+9.1%', trend: 'up', icon: DollarSign },
+      { label: 'Occupancy rate', value: '78%', delta: '+4%', trend: 'up', icon: BedDouble },
+      { label: 'Room bookings', value: '64', delta: '+12', trend: 'up', icon: CalendarDays },
       { label: 'Avg. rating', value: '4.6', delta: '-0.1', trend: 'down', icon: Star },
     ],
     tables: {
@@ -125,8 +125,8 @@ export const ROLE_MOCK: Record<Role, RoleMock> = {
           { room: '301', type: 'Presidential', capacity: '4', price: '$620', status: 'Available' },
         ],
       },
-      bookings: {
-        title: 'Bookings',
+      reservations: {
+        title: 'Reservations',
         description: 'Upcoming and in-house reservations.',
         columns: [
           { key: 'id', label: 'Booking' },
@@ -163,10 +163,10 @@ export const ROLE_MOCK: Record<Role, RoleMock> = {
 
   dine: {
     stats: [
-      { label: 'Revenue (30d)', value: '$12,340', delta: '+6.8%', trend: 'up', icon: DollarSign },
-      { label: 'Orders', value: '482', delta: '+54', trend: 'up', icon: ShoppingBag },
-      { label: 'Avg. ticket', value: '$25.60', delta: '-$1.20', trend: 'down', icon: UtensilsCrossed },
-      { label: 'Avg. rating', value: '4.5', delta: '+0.2', trend: 'up', icon: Star },
+      { label: 'Food revenue (30d)', value: '$12,340', delta: '+6.8%', trend: 'up', icon: DollarSign },
+      { label: 'Total orders', value: '482', delta: '+54', trend: 'up', icon: ShoppingBag },
+      { label: 'Table reservations', value: '36', delta: '+8', trend: 'up', icon: CalendarDays },
+      { label: 'Restaurant rating', value: '4.5', delta: '+0.2', trend: 'up', icon: Star },
     ],
     tables: {
       menu: {
@@ -208,10 +208,10 @@ export const ROLE_MOCK: Record<Role, RoleMock> = {
 
   shops: {
     stats: [
-      { label: 'Revenue (30d)', value: '$9,720', delta: '+14.2%', trend: 'up', icon: DollarSign },
+      { label: 'Store revenue (30d)', value: '$9,720', delta: '+14.2%', trend: 'up', icon: DollarSign },
       { label: 'Orders', value: '214', delta: '+32', trend: 'up', icon: ShoppingBag },
-      { label: 'Products', value: '86', delta: '+4', trend: 'up', icon: Package },
-      { label: 'Conversion', value: '3.4%', delta: '-0.2%', trend: 'down', icon: Users },
+      { label: 'Customers', value: '892', delta: '+41', trend: 'up', icon: Users },
+      { label: 'Product rating', value: '4.8', delta: '+0.1', trend: 'up', icon: Star },
     ],
     tables: {
       products: {
@@ -268,9 +268,9 @@ export const ROLE_MOCK: Record<Role, RoleMock> = {
 
   events: {
     stats: [
-      { label: 'Revenue (30d)', value: '$22,180', delta: '+18.6%', trend: 'up', icon: DollarSign },
-      { label: 'Active events', value: '6', delta: '+2', trend: 'up', icon: CalendarDays },
+      { label: 'Event revenue (30d)', value: '$22,180', delta: '+18.6%', trend: 'up', icon: DollarSign },
       { label: 'Tickets sold', value: '1,284', delta: '+240', trend: 'up', icon: Ticket },
+      { label: 'Active events', value: '6', delta: '+2', trend: 'up', icon: CalendarDays },
       { label: 'Attendees', value: '972', delta: '+8.5%', trend: 'up', icon: Users },
     ],
     tables: {
@@ -328,7 +328,7 @@ export const ROLE_MOCK: Record<Role, RoleMock> = {
 }
 
 export const DASHBOARD_ICON: Record<Role, IconType> = {
-  service: Wrench,
+  services: Wrench,
   stay: BedDouble,
   dine: UtensilsCrossed,
   shops: ShoppingBag,

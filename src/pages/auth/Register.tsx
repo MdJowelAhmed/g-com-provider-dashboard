@@ -14,6 +14,7 @@ import StepIndicator from '../../components/auth/StepIndicator'
 import { ROLES, type Role } from '../../types/role'
 import { ROLE_META, type FieldDef } from '../../config/roleConfig'
 import { useAuth } from '../../context/AuthContext'
+import { getDashboardPath } from '../../routing/roleRedirect'
 
 const STEPS = ['Category', 'Details', 'Payment', 'Done']
 
@@ -250,7 +251,7 @@ export default function Register() {
             </div>
             <PrimaryButton
               type="button"
-              onClick={() => navigate(`/dashboard/${user.role}`)}
+              onClick={() => navigate(getDashboardPath(user.role), { replace: true })}
             >
               Go to dashboard
             </PrimaryButton>

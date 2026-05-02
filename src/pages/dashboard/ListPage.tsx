@@ -1,6 +1,7 @@
 import { Plus } from 'lucide-react'
 import { Navigate, useParams } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
+import { canAccessDashboardTab } from '../../modules/permissions/resolver'
 import { ROLE_MOCK } from '../../data/mockData'
 import PageHeader from '../../components/dashboard/PageHeader'
 import DataTable from '../../components/dashboard/DataTable'
@@ -19,6 +20,11 @@ import EventsPage from './events/EventsPage'
 import TicketsPage from './events/TicketsPage'
 import AttendeesPage from './events/AttendeesPage'
 import WithdrawPage from './withdraw/WithdrawPage'
+import MessagesPage from './messaging/MessagesPage'
+import PostsPage from './posts/PostsPage'
+import ContactSupportPage from './support/ContactSupportPage'
+import SettingsPage from './settings/SettingsPage'
+import ControllersPage from './controllers/ControllersPage'
 
 export default function ListPage() {
   const { user } = useAuth()
@@ -26,19 +32,43 @@ export default function ListPage() {
 
   if (!user) return null
 
+  if (tab && !canAccessDashboardTab(user, tab)) {
+    return <Navigate to={`/dashboard/${user.role}`} replace />
+  }
+
   if (tab === 'withdraw') {
     return <WithdrawPage />
   }
 
-  if (user.role === 'service' && tab === 'services') {
+  if (tab === 'messages') {
+    return <MessagesPage />
+  }
+
+  if (tab === 'posts') {
+    return <PostsPage />
+  }
+
+  if (tab === 'support') {
+    return <ContactSupportPage />
+  }
+
+  if (tab === 'settings') {
+    return <SettingsPage />
+  }
+
+  if (tab === 'controllers') {
+    return <ControllersPage />
+  }
+
+  if (user.role === 'services' && tab === 'services') {
     return <ServicesPage />
   }
 
-  if (user.role === 'service' && tab === 'bookings') {
+  if (user.role === 'services' && tab === 'bookings') {
     return <BookingsPage />
   }
 
-  if (user.role === 'service' && tab === 'customers') {
+  if (user.role === 'services' && tab === 'customers') {
     return <ServiceCustomersPage />
   }
 
@@ -46,7 +76,7 @@ export default function ListPage() {
     return <RoomsPage />
   }
 
-  if (user.role === 'stay' && tab === 'bookings') {
+  if (user.role === 'stay' && tab === 'reservations') {
     return <StayBookingsPage />
   }
 

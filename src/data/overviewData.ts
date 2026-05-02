@@ -70,7 +70,7 @@ function trend(
 }
 
 export const OVERVIEW_DATA: Record<Role, OverviewData> = {
-  service: {
+  services: {
     trend: trend(1, 220, 0.35, 3, 0.4),
     statusBreakdown: [
       { label: 'Confirmed', value: 14, color: '#22c55e' },
