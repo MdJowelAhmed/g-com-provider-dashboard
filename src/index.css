@@ -39,6 +39,31 @@ body {
   scrollbar-width: thin;
 }
 
+/* Google Places autocomplete dropdown — must sit above Ant Design Drawer/Modal */
+.pac-container {
+  z-index: 10050 !important;
+  pointer-events: auto !important;
+  border-radius: 8px;
+  border: 1px solid #2a2a2e;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  font-family: inherit;
+}
+
+.pac-item {
+  padding: 8px 12px;
+  cursor: pointer;
+  color: #1f2937;
+}
+
+.pac-item:hover {
+  background: #f3f4f6;
+}
+
+.pac-item-query {
+  color: #111827;
+  font-size: 14px;
+}
+
 .messaging-input:focus {
   box-shadow: none;
 }

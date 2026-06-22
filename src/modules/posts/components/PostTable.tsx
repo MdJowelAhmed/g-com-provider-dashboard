@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion'
 import { ArrowDown, ArrowUp, ArrowUpDown, ImageOff } from 'lucide-react'
-import type { Post, SortKey } from '../types'
+import type { Post, PostMedia, SortKey } from '../types'
 import { getPostDisplayRow } from '../utils/postDisplay'
 import CampaignStatusBadge from './CampaignStatusBadge'
 import PostRowActions from './PostRowActions'
@@ -22,17 +22,15 @@ type Props = {
   onDelete: (post: Post) => void
 }
 
-function fmtLocalDateTime(local: string) {
-  const t = local?.trim()
+function fmtDate(value: string) {
+  const t = value?.trim()
   if (!t) return '—'
   const d = new Date(t)
   if (Number.isNaN(d.getTime())) return '—'
-  return d.toLocaleString(undefined, {
+  return d.toLocaleDateString(undefined, {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
   })
 }
 
@@ -110,19 +108,19 @@ export default function PostTable({
                 Media
               </th>
               <SortTh
-                label="Shop"
-                active={sortKey === 'shopName'}
+                label="Panel"
+                active={sortKey === 'panel'}
                 dir={sortDir}
-                onClick={() => onSort('shopName')}
+                onClick={() => onSort('panel')}
               />
               <SortTh
-                label="Product"
-                active={sortKey === 'productName'}
+                label="Item"
+                active={sortKey === 'itemId'}
                 dir={sortDir}
-                onClick={() => onSort('productName')}
+                onClick={() => onSort('itemId')}
               />
               <SortTh
-                label="About"
+                label="Caption"
                 active={sortKey === 'about'}
                 dir={sortDir}
                 onClick={() => onSort('about')}
@@ -174,7 +172,7 @@ export default function PostTable({
                 const row = getPostDisplayRow(post)
                 const thumb = row.media[0]
                 const selected = selectedIds.includes(post.id)
-                const labelForA11y = row.productName || 'post'
+                const labelForA11y = row.about || row.itemLabel || 'post'
                 return (
                   <motion.tr
                     layout
@@ -196,13 +194,13 @@ export default function PostTable({
                       <Thumb thumb={thumb} />
                     </td>
                     <td className="max-w-[140px] px-3 py-3.5 align-middle">
-                      <div className="truncate font-medium text-gray-100" title={row.shopName || undefined}>
-                        {row.shopName || '—'}
+                      <div className="truncate font-medium text-gray-100" title={row.panel || undefined}>
+                        {row.panel || '—'}
                       </div>
                     </td>
                     <td className="max-w-[160px] px-3 py-3.5 align-middle">
-                      <div className="truncate text-gray-200" title={row.productName || undefined}>
-                        {row.productName || '—'}
+                      <div className="truncate text-gray-200" title={post.itemId || undefined}>
+                        {row.itemLabel || '—'}
                       </div>
                     </td>
                     <td className="max-w-[220px] px-3 py-3.5 align-middle">
@@ -217,10 +215,10 @@ export default function PostTable({
                       {row.amount ? row.amount : '—'}
                     </td>
                     <td className="whitespace-nowrap px-3 py-3.5 align-middle text-xs tabular-nums text-gray-400">
-                      {fmtLocalDateTime(row.startLocal)}
+                      {fmtDate(row.startLocal)}
                     </td>
                     <td className="whitespace-nowrap px-3 py-3.5 align-middle text-xs tabular-nums text-gray-400">
-                      {fmtLocalDateTime(row.endLocal)}
+                      {fmtDate(row.endLocal)}
                     </td>
                     <td className="px-3 py-3.5 align-middle">
                       <CampaignStatusBadge status={row.campaignStatus} />
@@ -243,7 +241,7 @@ export default function PostTable({
   )
 }
 
-function Thumb({ thumb }: { thumb: Post['media'][number] | undefined }) {
+function Thumb({ thumb }: { thumb: PostMedia | undefined }) {
   if (!thumb) {
     return (
       <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg border border-white/[0.06] bg-surface-elevated text-gray-500 shadow-inner transition group-hover:border-white/[0.1]">

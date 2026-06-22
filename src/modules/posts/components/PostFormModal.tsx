@@ -1,10 +1,10 @@
 import { Form, Modal } from 'antd'
 import { motion } from 'framer-motion'
-import { useEffect, useMemo } from 'react'
+import { useEffect } from 'react'
+import ImageUploader from '../../../components/common/ImageUploader'
 import type { RolePostConfig } from '../config/rolePostConfig'
 import type { Post, PostFormValues } from '../types'
-import { MOCK_SHOPS, postToFormValues, productsForShop } from '../utils/postFormMapping'
-import PostMediaUpload from './PostMediaUpload'
+import { HUB_POST_PANEL_OPTIONS, postToFormValues } from '../utils/hubPostMapping'
 import { postFieldClass, postLabelClass, postTextareaClass } from './postFormFieldClasses'
 
 type Props = {
@@ -12,21 +12,20 @@ type Props = {
   mode: 'create' | 'edit'
   initialPost?: Post | null
   config: RolePostConfig
+  submitting?: boolean
   onCancel: () => void
-  onSubmit: (values: PostFormValues) => void
+  onSubmit: (values: PostFormValues) => void | Promise<void>
 }
 
 function blankForm(): PostFormValues {
-  const shopId = MOCK_SHOPS[0]?.id ?? ''
-  const firstProduct = productsForShop(shopId)[0]?.id ?? ''
   return {
-    shopId,
-    productId: firstProduct,
-    totalAmount: '',
-    startLocal: '',
-    endLocal: '',
-    about: '',
-    media: [],
+    itemId: '',
+    panel: 'both',
+    caption: '',
+    media: '',
+    itemPrice: '',
+    startDate: '',
+    endDate: '',
   }
 }
 
@@ -35,15 +34,12 @@ export default function PostFormModal({
   mode,
   initialPost,
   config: _config,
+  submitting = false,
   onCancel,
   onSubmit,
 }: Props) {
   void _config
   const [form] = Form.useForm<PostFormValues>()
-
-  const shopId = Form.useWatch('shopId', form)
-
-  const productOptions = useMemo(() => productsForShop(shopId || MOCK_SHOPS[0]?.id || ''), [shopId])
 
   useEffect(() => {
     if (!open) return
@@ -54,25 +50,15 @@ export default function PostFormModal({
     }
   }, [open, mode, initialPost, form])
 
-  useEffect(() => {
-    if (!open || !shopId) return
-    const ids = productsForShop(shopId).map((p) => p.id)
-    const current = form.getFieldValue('productId') as string
-    if (!ids.some((id) => id === current)) {
-      form.setFieldValue('productId', ids[0] ?? '')
-    }
-  }, [shopId, open, form])
-
-  const handleFinish = (v: PostFormValues) => {
-    onSubmit({
+  const handleFinish = async (v: PostFormValues) => {
+    await onSubmit({
       ...v,
-      shopId: v.shopId,
-      productId: v.productId,
-      totalAmount: v.totalAmount.trim(),
-      startLocal: v.startLocal,
-      endLocal: v.endLocal,
-      about: v.about.trim(),
-      media: v.media ?? [],
+      itemId: v.itemId.trim(),
+      caption: v.caption.trim(),
+      media: v.media.trim(),
+      itemPrice: v.itemPrice.trim(),
+      startDate: v.startDate,
+      endDate: v.endDate,
     })
   }
 
@@ -104,42 +90,52 @@ export default function PostFormModal({
           className="space-y-4"
         >
           <Form.Item
-            name="shopId"
-            label={<span className={postLabelClass}>Select Shop</span>}
-            rules={[{ required: true, message: '' }]}
+            name="itemId"
+            label={<span className={postLabelClass}>Item ID</span>}
+            rules={[{ required: true, message: 'Item ID is required' }]}
+          >
+            <input
+              type="text"
+              placeholder="e.g. 6a01b9436f6c4075b0dcc042"
+              autoComplete="off"
+              className={postFieldClass}
+            />
+          </Form.Item>
+
+          <Form.Item
+            name="panel"
+            label={<span className={postLabelClass}>Panel</span>}
+            rules={[{ required: true, message: 'Panel is required' }]}
           >
             <select className={postFieldClass}>
-              {MOCK_SHOPS.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
+              {HUB_POST_PANEL_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
                 </option>
               ))}
             </select>
           </Form.Item>
 
           <Form.Item
-            name="productId"
-            label={<span className={postLabelClass}>Select Product</span>}
-            rules={[{ required: true, message: '' }]}
-          >
-            <select className={postFieldClass} disabled={productOptions.length === 0}>
-              {productOptions.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          </Form.Item>
-
-          <Form.Item
-            name="totalAmount"
-            label={<span className={postLabelClass}>Total Amount</span>}
-            rules={[{ required: true, message: '' }]}
+            name="itemPrice"
+            label={<span className={postLabelClass}>Item price</span>}
+            rules={[
+              { required: true, message: 'Price is required' },
+              {
+                validator(_, value) {
+                  const n = Number(value)
+                  if (!Number.isFinite(n) || n < 0) {
+                    return Promise.reject(new Error('Enter a valid price'))
+                  }
+                  return Promise.resolve()
+                },
+              },
+            ]}
           >
             <input
               type="text"
               inputMode="decimal"
-              placeholder="0.00"
+              placeholder="99.99"
               autoComplete="off"
               className={postFieldClass}
             />
@@ -147,65 +143,67 @@ export default function PostFormModal({
 
           <div className="grid gap-4 sm:grid-cols-2">
             <Form.Item
-              name="startLocal"
-              label={<span className={postLabelClass}>Start Date and Time</span>}
-              rules={[{ required: true, message: '' }]}
+              name="startDate"
+              label={<span className={postLabelClass}>Start date</span>}
+              rules={[{ required: true, message: 'Start date is required' }]}
             >
-              <input type="datetime-local" className={`${postFieldClass} font-mono text-[13px]`} />
+              <input type="date" className={`${postFieldClass} font-mono text-[13px]`} />
             </Form.Item>
             <Form.Item
-              name="endLocal"
-              label={<span className={postLabelClass}>End Date and Time</span>}
-              dependencies={['startLocal']}
+              name="endDate"
+              label={<span className={postLabelClass}>End date</span>}
+              dependencies={['startDate']}
               rules={[
-                { required: true, message: '' },
+                { required: true, message: 'End date is required' },
                 ({ getFieldValue }) => ({
                   validator(_, value) {
-                    const start = getFieldValue('startLocal') as string
+                    const start = getFieldValue('startDate') as string
                     if (!value || !start) return Promise.resolve()
-                    if (new Date(value) <= new Date(start)) {
-                      return Promise.reject(new Error(' '))
+                    if (value <= start) {
+                      return Promise.reject(new Error('End date must be after start date'))
                     }
                     return Promise.resolve()
                   },
                 }),
               ]}
             >
-              <input type="datetime-local" className={`${postFieldClass} font-mono text-[13px]`} />
+              <input type="date" className={`${postFieldClass} font-mono text-[13px]`} />
             </Form.Item>
           </div>
 
           <Form.Item
-            name="about"
-            label={<span className={postLabelClass}>About This Product</span>}
-            rules={[{ required: true, message: '' }]}
+            name="caption"
+            label={<span className={postLabelClass}>Caption</span>}
+            rules={[{ required: true, message: 'Caption is required' }]}
           >
             <textarea rows={4} placeholder="Describe the offer" className={postTextareaClass} />
           </Form.Item>
 
           <Form.Item
             name="media"
-            label={<span className={postLabelClass}>Upload Picture/Video</span>}
-            className="!mb-0"
+            label={<span className={postLabelClass}>Media image</span>}
+            rules={[{ required: true, message: 'Media image is required' }]}
           >
-            <PostMediaUpload maxFiles={6} />
+            <ImageUploader autoUpload hint="Upload an image or paste URL after upload" />
           </Form.Item>
 
           <div className="flex justify-end gap-3 border-t border-white/[0.06] pt-5">
             <button
               type="button"
               onClick={onCancel}
-              className="h-10 rounded-xl border border-white/[0.1] bg-transparent px-5 text-sm font-medium text-gray-300 transition hover:border-white/[0.18] hover:bg-white/[0.04] hover:text-white"
+              disabled={submitting}
+              className="h-10 rounded-xl border border-white/[0.1] bg-transparent px-5 text-sm font-medium text-gray-300 transition hover:border-white/[0.18] hover:bg-white/[0.04] hover:text-white disabled:opacity-50"
             >
               Cancel
             </button>
             <motion.button
               type="submit"
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              className="h-10 rounded-xl bg-brand px-6 text-sm font-semibold text-white shadow-lg shadow-brand/20 ring-1 ring-brand/30 transition hover:bg-brand-hover"
+              disabled={submitting}
+              whileHover={submitting ? undefined : { scale: 1.02 }}
+              whileTap={submitting ? undefined : { scale: 0.98 }}
+              className="h-10 rounded-xl bg-brand px-6 text-sm font-semibold text-white shadow-lg shadow-brand/20 ring-1 ring-brand/30 transition hover:bg-brand-hover disabled:opacity-50"
             >
-              {mode === 'edit' ? 'Save' : 'Post'}
+              {submitting ? 'Saving…' : mode === 'edit' ? 'Save' : 'Post'}
             </motion.button>
           </div>
         </Form>

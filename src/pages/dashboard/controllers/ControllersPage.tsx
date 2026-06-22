@@ -1,11 +1,13 @@
 import { ShieldCheck, UserPlus } from 'lucide-react'
 import { useCallback, useRef } from 'react'
 import { useAuth } from '../../../context/AuthContext'
+import { useDashboardRole } from '../../../auth/useDashboardRole'
 import PageHeader from '../../../components/dashboard/PageHeader'
 import ControllersManagementShell from '../../../modules/controllers/components/ControllersManagementShell'
 
 export default function ControllersPage() {
   const { user } = useAuth()
+  const dashboardRole = useDashboardRole()
   const openCreateRef = useRef<() => void>(() => {})
   const registerOpenCreate = useCallback((fn: () => void) => {
     openCreateRef.current = fn
@@ -36,7 +38,7 @@ export default function ControllersPage() {
       />
       <ControllersManagementShell
         tenantUserId={user.id}
-        dashboardRole={user.role}
+        dashboardRole={dashboardRole}
         registerOpenCreate={registerOpenCreate}
       />
     </div>

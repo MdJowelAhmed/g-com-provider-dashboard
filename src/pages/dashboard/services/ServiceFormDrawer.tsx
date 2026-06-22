@@ -1,91 +1,180 @@
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import {
   Drawer,
   Form,
   Input,
   InputNumber,
   Select,
-  Switch,
   Row,
   Col,
   Divider,
   Button,
   Space,
 } from 'antd'
+import ImageUploader from '../../../components/common/ImageUploader'
+import { useDashboardRole } from '../../../auth/useDashboardRole'
+import { useGetBusinessCategoriesQuery } from '../../../redux/api/businessCategoryApi'
+import { useGetShopsQuery } from '../../../redux/api/shopManagementApi'
+import { useGetSubCategoriesQuery } from '../../../redux/api/serviceApi'
 import {
-  SERVICE_CATEGORIES,
-  SERVICE_STATUS_OPTIONS,
+  PLATFORM_CATEGORY_OPTIONS,
   PRICING_TYPE_OPTIONS,
-  LOCATION_TYPE_OPTIONS,
+  businessCategoryToPlatformCategory,
+  dashboardRoleToPlatformCategory,
+  type PlatformCategory,
   type Service,
+  type ServiceFormValues,
 } from './serviceTypes'
+import { serviceToFormValues } from './serviceMapping'
+import { useAuth } from '../../../context/AuthContext'
 
 type Props = {
   open: boolean
   mode: 'add' | 'edit'
   initial?: Service | null
+  initialPlatformCategory?: PlatformCategory | null
+  submitting?: boolean
   onCancel: () => void
-  onSubmit: (values: Omit<Service, 'id' | 'createdAt'>) => void
+  onSubmit: (values: ServiceFormValues) => void | Promise<void>
 }
 
-type FormValues = Omit<Service, 'id' | 'createdAt'>
-
-const blankValues: FormValues = {
-  image: '',
-  name: '',
-  code: '',
-  category: SERVICE_CATEGORIES[0],
-  shortDescription: '',
-  description: '',
-
-  pricingType: 'fixed',
-  price: 0,
-  salePrice: null,
-
-  durationMinutes: 60,
-  bufferMinutes: 15,
-
-  serviceArea: '',
-  locationType: 'on_site',
-  staffRequired: 1,
-  warrantyDays: null,
-
-  advanceBookingHours: 4,
-  maxBookingsPerDay: null,
-  cancellationPolicy: '',
-
-  includes: '',
-  excludes: '',
-  addons: '',
-  tags: '',
-
-  status: 'active',
-  featured: false,
-  hidden: false,
+function defaultPlatformCategory(
+  dashboardRole: string,
+  businessCategory?: string,
+): PlatformCategory {
+  if (businessCategory?.trim()) {
+    return businessCategoryToPlatformCategory(businessCategory)
+  }
+  return dashboardRoleToPlatformCategory(dashboardRole)
 }
 
-export default function ServiceFormDrawer({ open, mode, initial, onCancel, onSubmit }: Props) {
-  const [form] = Form.useForm<FormValues>()
+function blankValues(platformCategory: PlatformCategory): ServiceFormValues {
+  return {
+    name: '',
+    serviceCode: '',
+    platformCategory,
+    subCategory: '',
+    businessCategory: '',
+    description: '',
+    pricingType: 'fixed',
+    price: 0,
+    duration: '',
+    maxBookingPerDay: 10,
+    branch: '',
+    image: '',
+  }
+}
+
+export default function ServiceFormDrawer({
+  open,
+  mode,
+  initial,
+  initialPlatformCategory,
+  submitting = false,
+  onCancel,
+  onSubmit,
+}: Props) {
+  const [form] = Form.useForm<ServiceFormValues>()
+  const { user } = useAuth()
+  const dashboardRole = useDashboardRole()
+
+  const platformCategory = Form.useWatch('platformCategory', form) as PlatformCategory | '' | undefined
+
+  const { data: shopsData, isLoading: shopsLoading } = useGetShopsQuery(
+    { page: 1, limit: 100 },
+    { skip: !open },
+  )
+  const { data: categoriesData, isLoading: categoriesLoading } = useGetBusinessCategoriesQuery(
+    undefined,
+    { skip: !open },
+  )
+  const { data: subCategoriesData, isLoading: subCategoriesLoading } = useGetSubCategoriesQuery(
+    { category: platformCategory as PlatformCategory, page: 1, limit: 100 },
+    { skip: !open || !platformCategory },
+  )
+
+  const branchOptions = useMemo(
+    () =>
+      (shopsData?.data ?? []).map((shop) => ({
+        value: shop._id,
+        label: shop.branchName,
+      })),
+    [shopsData?.data],
+  )
+
+  const businessCategoryOptions = useMemo(
+    () =>
+      (categoriesData?.data ?? []).map((category) => ({
+        value: category._id,
+        label: category.name,
+      })),
+    [categoriesData?.data],
+  )
+
+  const subCategoryOptions = useMemo(
+    () =>
+      (subCategoriesData?.data ?? [])
+        .filter((item) => item.status === 'active')
+        .map((item) => ({
+          value: item._id,
+          label: item.name,
+        })),
+    [subCategoriesData?.data],
+  )
 
   useEffect(() => {
     if (!open) return
+
+    const businessCategory =
+      typeof user?.extra?.category === 'string' ? user.extra.category : undefined
+    const fallbackPlatform = defaultPlatformCategory(dashboardRole, businessCategory)
+
     if (mode === 'edit' && initial) {
-      const { id: _id, createdAt: _c, ...rest } = initial
-      void _id
-      void _c
-      form.setFieldsValue(rest)
-    } else {
-      form.setFieldsValue(blankValues)
+      form.setFieldsValue({
+        ...serviceToFormValues(initial),
+        platformCategory: initialPlatformCategory ?? fallbackPlatform,
+      })
+      return
     }
-  }, [open, mode, initial, form])
+
+    form.setFieldsValue({
+      ...blankValues(fallbackPlatform),
+      branch: branchOptions[0]?.value ?? '',
+      businessCategory: businessCategoryOptions[0]?.value ?? '',
+    })
+  }, [
+    open,
+    mode,
+    initial,
+    initialPlatformCategory,
+    form,
+    branchOptions,
+    businessCategoryOptions,
+    dashboardRole,
+    user?.extra?.category,
+  ])
+
+  useEffect(() => {
+    if (!open || !platformCategory) return
+    const currentSub = form.getFieldValue('subCategory') as string
+    if (!currentSub) return
+    const stillValid = subCategoryOptions.some((option) => option.value === currentSub)
+    if (!stillValid && !subCategoriesLoading) {
+      form.setFieldValue('subCategory', '')
+    }
+  }, [open, platformCategory, subCategoryOptions, subCategoriesLoading, form])
+
+  const handlePlatformCategoryChange = () => {
+    form.setFieldValue('subCategory', '')
+  }
 
   const handleOk = async () => {
     const values = await form.validateFields()
-    onSubmit({
+    await onSubmit({
       ...values,
-      salePrice: values.salePrice ?? null,
-      warrantyDays: values.warrantyDays ?? null,
-      maxBookingsPerDay: values.maxBookingsPerDay ?? null,
+      price: Number(values.price),
+      maxBookingPerDay: Number(values.maxBookingPerDay),
+      duration: String(values.duration).trim(),
     })
   }
 
@@ -99,8 +188,10 @@ export default function ServiceFormDrawer({ open, mode, initial, onCancel, onSub
       destroyOnHidden
       footer={
         <Space style={{ display: 'flex', justifyContent: 'flex-end', width: '100%' }}>
-          <Button onClick={onCancel}>Cancel</Button>
-          <Button type="primary" onClick={handleOk}>
+          <Button onClick={onCancel} disabled={submitting}>
+            Cancel
+          </Button>
+          <Button type="primary" onClick={handleOk} loading={submitting}>
             {mode === 'edit' ? 'Save changes' : 'Add service'}
           </Button>
         </Space>
@@ -109,7 +200,7 @@ export default function ServiceFormDrawer({ open, mode, initial, onCancel, onSub
       <Form
         form={form}
         layout="vertical"
-        initialValues={blankValues}
+        initialValues={blankValues(dashboardRoleToPlatformCategory(dashboardRole))}
         requiredMark="optional"
       >
         <Divider titlePlacement="start" orientationMargin={0} plain>
@@ -122,56 +213,89 @@ export default function ServiceFormDrawer({ open, mode, initial, onCancel, onSub
               label="Service name"
               rules={[{ required: true, message: 'Name is required' }]}
             >
-              <Input placeholder="e.g. Deep home cleaning" />
+              <Input placeholder="e.g. Home Cleaning Service" />
             </Form.Item>
           </Col>
           <Col span={8}>
             <Form.Item
-              name="code"
+              name="serviceCode"
               label="Service code"
               rules={[{ required: true, message: 'Code is required' }]}
             >
-              <Input placeholder="CLN-DEEP" />
+              <Input placeholder="HC-001" />
             </Form.Item>
           </Col>
           <Col span={24}>
-            <Form.Item name="image" label="Cover image URL">
-              <Input placeholder="https://..." />
+            <Form.Item
+              name="image"
+              label="Cover image"
+              rules={[{ required: true, message: 'Image is required' }]}
+            >
+              <ImageUploader autoUpload hint="Upload a service cover image" />
             </Form.Item>
           </Col>
           <Col span={12}>
             <Form.Item
-              name="category"
-              label="Category"
-              rules={[{ required: true, message: 'Category is required' }]}
+              name="businessCategory"
+              label="Business category"
+              rules={[{ required: true, message: 'Select a business category' }]}
             >
               <Select
-                options={SERVICE_CATEGORIES.map((c) => ({ value: c, label: c }))}
+                showSearch
+                optionFilterProp="label"
+                loading={categoriesLoading}
+                options={businessCategoryOptions}
+                placeholder="Select business category"
               />
             </Form.Item>
           </Col>
           <Col span={12}>
-            <Form.Item name="tags" label="Tags" help="Comma separated">
-              <Input placeholder="cleaning, deep, home" />
+            <Form.Item
+              name="platformCategory"
+              label="Category"
+              rules={[{ required: true, message: 'Select a category' }]}
+            >
+              <Select
+                options={PLATFORM_CATEGORY_OPTIONS}
+                placeholder="Select category"
+                onChange={handlePlatformCategoryChange}
+              />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item
+              name="subCategory"
+              label="Sub category"
+              rules={[{ required: true, message: 'Select a sub category' }]}
+            >
+              <Select
+                showSearch
+                optionFilterProp="label"
+                loading={subCategoriesLoading}
+                options={subCategoryOptions}
+                placeholder={
+                  platformCategory ? 'Select sub category' : 'Select a category first'
+                }
+                disabled={!platformCategory}
+              />
             </Form.Item>
           </Col>
           <Col span={24}>
-            <Form.Item name="shortDescription" label="Short description">
-              <Input placeholder="One-liner shown on the listing card" maxLength={140} />
-            </Form.Item>
-          </Col>
-          <Col span={24}>
-            <Form.Item name="description" label="Full description">
+            <Form.Item
+              name="description"
+              label="Description"
+              rules={[{ required: true, message: 'Description is required' }]}
+            >
               <Input.TextArea
                 rows={4}
-                placeholder="Explain what's covered, the process, and anything customers should know"
+                placeholder="Professional home cleaning service for apartments and houses."
               />
             </Form.Item>
           </Col>
         </Row>
 
         <Divider titlePlacement="start" orientationMargin={0} plain>
-          Pricing
+          Pricing & scheduling
         </Divider>
         <Row gutter={16}>
           <Col span={8}>
@@ -186,137 +310,43 @@ export default function ServiceFormDrawer({ open, mode, initial, onCancel, onSub
           <Col span={8}>
             <Form.Item
               name="price"
-              label="Price ($)"
+              label="Price"
               rules={[{ required: true, message: 'Price is required' }]}
             >
               <InputNumber min={0} step={0.01} style={{ width: '100%' }} />
             </Form.Item>
           </Col>
           <Col span={8}>
-            <Form.Item name="salePrice" label="Sale price ($)">
-              <InputNumber min={0} step={0.01} style={{ width: '100%' }} placeholder="Optional" />
-            </Form.Item>
-          </Col>
-        </Row>
-
-        <Divider titlePlacement="start" orientationMargin={0} plain>
-          Duration & delivery
-        </Divider>
-        <Row gutter={16}>
-          <Col span={8}>
             <Form.Item
-              name="durationMinutes"
-              label="Duration (minutes)"
+              name="duration"
+              label="Duration (hours)"
               rules={[{ required: true, message: 'Duration is required' }]}
             >
-              <InputNumber min={5} step={5} style={{ width: '100%' }} />
-            </Form.Item>
-          </Col>
-          <Col span={8}>
-            <Form.Item name="bufferMinutes" label="Buffer between jobs (min)">
-              <InputNumber min={0} step={5} style={{ width: '100%' }} />
-            </Form.Item>
-          </Col>
-          <Col span={8}>
-            <Form.Item
-              name="locationType"
-              label="Where it's done"
-              rules={[{ required: true, message: 'Select where it is delivered' }]}
-            >
-              <Select options={LOCATION_TYPE_OPTIONS} />
+              <Input placeholder="3" />
             </Form.Item>
           </Col>
           <Col span={12}>
             <Form.Item
-              name="serviceArea"
-              label="Service area"
-              rules={[{ required: true, message: 'Service area is required' }]}
-            >
-              <Input placeholder="e.g. Downtown, 10km radius" />
-            </Form.Item>
-          </Col>
-          <Col span={6}>
-            <Form.Item
-              name="staffRequired"
-              label="Staff assigned"
-              rules={[{ required: true, message: 'Enter staff count' }]}
+              name="maxBookingPerDay"
+              label="Max bookings / day"
+              rules={[{ required: true, message: 'Max bookings is required' }]}
             >
               <InputNumber min={1} style={{ width: '100%' }} />
             </Form.Item>
           </Col>
-          <Col span={6}>
-            <Form.Item name="warrantyDays" label="Warranty (days)">
-              <InputNumber min={0} style={{ width: '100%' }} placeholder="Optional" />
-            </Form.Item>
-          </Col>
-        </Row>
-
-        <Divider titlePlacement="start" orientationMargin={0} plain>
-          Booking rules
-        </Divider>
-        <Row gutter={16}>
           <Col span={12}>
             <Form.Item
-              name="advanceBookingHours"
-              label="Min. advance notice (hrs)"
-              rules={[{ required: true, message: 'Enter advance notice' }]}
+              name="branch"
+              label="Branch (shop)"
+              rules={[{ required: true, message: 'Select a branch' }]}
             >
-              <InputNumber min={0} style={{ width: '100%' }} />
-            </Form.Item>
-          </Col>
-          <Col span={12}>
-            <Form.Item name="maxBookingsPerDay" label="Max bookings / day">
-              <InputNumber min={1} style={{ width: '100%' }} placeholder="Unlimited" />
-            </Form.Item>
-          </Col>
-          <Col span={24}>
-            <Form.Item name="cancellationPolicy" label="Cancellation policy">
-              <Input.TextArea
-                rows={2}
-                placeholder="e.g. Free cancellation up to 6 hours before the appointment."
+              <Select
+                showSearch
+                optionFilterProp="label"
+                loading={shopsLoading}
+                options={branchOptions}
+                placeholder="Select shop branch"
               />
-            </Form.Item>
-          </Col>
-        </Row>
-
-        <Divider titlePlacement="start" orientationMargin={0} plain>
-          What's included
-        </Divider>
-        <Row gutter={16}>
-          <Col span={12}>
-            <Form.Item name="includes" label="Included" help="Comma separated">
-              <Input.TextArea rows={2} placeholder="Vacuuming, Mopping, Bathroom scrub" />
-            </Form.Item>
-          </Col>
-          <Col span={12}>
-            <Form.Item name="excludes" label="Not included" help="Comma separated">
-              <Input.TextArea rows={2} placeholder="Laundry, Dishwashing" />
-            </Form.Item>
-          </Col>
-          <Col span={24}>
-            <Form.Item name="addons" label="Optional add-ons" help="Comma separated">
-              <Input placeholder="Window cleaning, Fridge interior, Oven interior" />
-            </Form.Item>
-          </Col>
-        </Row>
-
-        <Divider titlePlacement="start" orientationMargin={0} plain>
-          Visibility
-        </Divider>
-        <Row gutter={16}>
-          <Col span={8}>
-            <Form.Item name="status" label="Status">
-              <Select options={SERVICE_STATUS_OPTIONS} />
-            </Form.Item>
-          </Col>
-          <Col span={8}>
-            <Form.Item name="featured" label="Featured" valuePropName="checked">
-              <Switch />
-            </Form.Item>
-          </Col>
-          <Col span={8}>
-            <Form.Item name="hidden" label="Hidden from listing" valuePropName="checked">
-              <Switch />
             </Form.Item>
           </Col>
         </Row>

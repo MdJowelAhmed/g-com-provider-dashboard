@@ -1,9 +1,9 @@
 import { AnimatePresence } from 'framer-motion'
-import { Modal } from 'antd'
+import { Modal, message } from 'antd'
 import { useCallback, useLayoutEffect, useMemo, useState } from 'react'
 import type { Role } from '../../../types/role'
 import { getRolePostConfig } from '../config/rolePostConfig'
-import { usePosts } from '../hooks/usePosts'
+import { getHubPostApiErrorMessage, usePosts } from '../hooks/usePosts'
 import type { Post } from '../types'
 import PostDetailModal from './PostDetailModal'
 import PostFiltersBar from './PostFiltersBar'
@@ -43,19 +43,26 @@ export default function PostsManagementShell({
 
   const confirmDelete = useCallback(
     (post: Post) => {
-      const title = post.title || 'this post'
+      const label = post.caption.trim() || post.itemId || 'this post'
       Modal.confirm({
         title: 'Delete post?',
         content: (
           <span>
-            Permanently delete <b>{title}</b>? This cannot be undone.
+            Permanently delete <b>{label}</b>? This cannot be undone.
           </span>
         ),
         okText: 'Delete',
         okButtonProps: { danger: true },
         cancelText: 'Cancel',
         centered: true,
-        onOk: () => postsApi.deletePost(post.id),
+        onOk: async () => {
+          try {
+            await postsApi.deletePost(post.id)
+            message.success('Post deleted')
+          } catch (error) {
+            message.error(getHubPostApiErrorMessage(error, 'Failed to delete post'))
+          }
+        },
       })
     },
     [postsApi],
@@ -71,16 +78,47 @@ export default function PostsManagementShell({
       okButtonProps: { danger: true },
       cancelText: 'Cancel',
       centered: true,
-      onOk: () => postsApi.bulkDelete(postsApi.selectedIds),
+      onOk: async () => {
+        try {
+          await postsApi.bulkDelete(postsApi.selectedIds)
+          message.success(`Deleted ${n} post${n === 1 ? '' : 's'}`)
+        } catch (error) {
+          message.error(getHubPostApiErrorMessage(error, 'Failed to delete posts'))
+        }
+      },
     })
   }, [postsApi])
+
+  const handleFormSubmit = useCallback(
+    async (values: Parameters<typeof postsApi.createPost>[0]) => {
+      try {
+        if (formModal.mode === 'edit' && formModal.post) {
+          await postsApi.updatePost(formModal.post.id, values)
+          message.success('Post updated')
+        } else {
+          await postsApi.createPost(values)
+          message.success('Post created')
+        }
+        setFormModal({ mode: 'closed' })
+      } catch (error) {
+        message.error(
+          getHubPostApiErrorMessage(
+            error,
+            formModal.mode === 'edit' ? 'Failed to update post' : 'Failed to create post',
+          ),
+        )
+        throw error
+      }
+    },
+    [formModal.mode, formModal.post, postsApi],
+  )
 
   return (
     <div>
       <PostFiltersBar
         search={postsApi.search}
         onSearchChange={postsApi.setSearch}
-        searchPlaceholder="Search by shop, product, or description"
+        searchPlaceholder="Search by panel, item, or caption"
         statusFilter={postsApi.statusFilter}
         onStatusChange={postsApi.setStatusFilter}
       />
@@ -98,7 +136,7 @@ export default function PostsManagementShell({
 
       <PostTable
         posts={postsApi.paginated}
-        loading={postsApi.initialLoading}
+        loading={postsApi.initialLoading || postsApi.isFetching}
         sortKey={postsApi.sortKey}
         sortDir={postsApi.sortDir}
         onSort={postsApi.toggleSort}
@@ -128,15 +166,9 @@ export default function PostsManagementShell({
         mode={formModal.mode === 'edit' ? 'edit' : 'create'}
         initialPost={formModal.mode === 'edit' ? formModal.post ?? null : null}
         config={config}
+        submitting={postsApi.isSubmitting}
         onCancel={() => setFormModal({ mode: 'closed' })}
-        onSubmit={(values) => {
-          if (formModal.mode === 'edit' && formModal.post) {
-            postsApi.updatePost(formModal.post.id, values)
-          } else {
-            postsApi.createPost(values)
-          }
-          setFormModal({ mode: 'closed' })
-        }}
+        onSubmit={handleFormSubmit}
       />
 
       <PostDetailModal open={detailPost !== null} post={detailPost} onClose={() => setDetailPost(null)} />

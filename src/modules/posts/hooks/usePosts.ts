@@ -1,24 +1,21 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
+import type { FetchBaseQueryError } from '@reduxjs/toolkit/query'
 import type { Role } from '../../../types/role'
-import { getRolePostConfig } from '../config/rolePostConfig'
+import {
+  useCreateHubPostMutation,
+  useDeleteHubPostMutation,
+  useGetHubPostsQuery,
+  useUpdateHubPostMutation,
+} from '../../../redux/api/hubPostApi'
 import { ALL_FILTER, DEFAULT_PAGE_SIZE } from '../constants'
-import { seedPostsForRole } from '../mock/seedPosts'
-import type { Post, PostFormValues, SortDir, SortKey } from '../types'
+import type { PostFormValues, SortDir, SortKey } from '../types'
+import { formValuesToHubPostPayload, mapHubPostFromApi } from '../utils/hubPostMapping'
 import {
   campaignStatusOrder,
   getPostDisplayRow,
   localDateTimeMs,
   parseAmountSort,
 } from '../utils/postDisplay'
-import { mapFormValuesToPostFields } from '../utils/postFormMapping'
-
-function makePostId(role: Role) {
-  const base =
-    typeof crypto !== 'undefined' && 'randomUUID' in crypto
-      ? crypto.randomUUID().slice(0, 8)
-      : Date.now().toString(36)
-  return `${role}_${base}`
-}
 
 function compareStrings(a: string, b: string, dir: SortDir) {
   const cmp = a.localeCompare(b, undefined, { sensitivity: 'base' })
@@ -37,8 +34,22 @@ function compareTime(a: string | null, b: string | null, dir: SortDir) {
   return dir === 'asc' ? cmp : -cmp
 }
 
+export function getHubPostApiErrorMessage(error: unknown, fallback: string) {
+  if (error && typeof error === 'object' && 'data' in error) {
+    const data = (error as FetchBaseQueryError).data
+    if (data && typeof data === 'object') {
+      const payload = data as { message?: unknown; errorMessages?: { message?: string }[] }
+      if (typeof payload.message === 'string' && payload.message.trim()) {
+        return payload.message
+      }
+      const first = payload.errorMessages?.[0]?.message
+      if (first?.trim()) return first
+    }
+  }
+  return fallback
+}
+
 export function usePosts(role: Role) {
-  const [posts, setPosts] = useState<Post[]>(() => seedPostsForRole(role))
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>(ALL_FILTER)
   const [sortKey, setSortKey] = useState<SortKey>('updatedAt')
@@ -46,12 +57,19 @@ export function usePosts(role: Role) {
   const [page, setPage] = useState(1)
   const [pageSize] = useState(DEFAULT_PAGE_SIZE)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
-  const [initialLoading, setInitialLoading] = useState(true)
 
-  useEffect(() => {
-    const t = window.setTimeout(() => setInitialLoading(false), 420)
-    return () => window.clearTimeout(t)
-  }, [])
+  const { data, isLoading, isFetching, isError } = useGetHubPostsQuery({
+    page: 1,
+    limit: 100,
+  })
+  const [createHubPost, { isLoading: isCreating }] = useCreateHubPostMutation()
+  const [updateHubPost, { isLoading: isUpdating }] = useUpdateHubPostMutation()
+  const [deleteHubPost, { isLoading: isDeleting }] = useDeleteHubPostMutation()
+
+  const posts = useMemo(
+    () => (data?.data ?? []).map((doc) => mapHubPostFromApi(doc, role)),
+    [data?.data, role],
+  )
 
   const filteredSorted = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -62,8 +80,9 @@ export function usePosts(role: Role) {
       }
       if (!q) return true
       return (
-        row.shopName.toLowerCase().includes(q) ||
-        row.productName.toLowerCase().includes(q) ||
+        row.panel.toLowerCase().includes(q) ||
+        row.itemLabel.toLowerCase().includes(q) ||
+        p.itemId.toLowerCase().includes(q) ||
         row.about.toLowerCase().includes(q)
       )
     })
@@ -72,10 +91,10 @@ export function usePosts(role: Role) {
       const ra = getPostDisplayRow(a)
       const rb = getPostDisplayRow(b)
       switch (sortKey) {
-        case 'shopName':
-          return compareStrings(ra.shopName, rb.shopName, sortDir)
-        case 'productName':
-          return compareStrings(ra.productName, rb.productName, sortDir)
+        case 'panel':
+          return compareStrings(ra.panel, rb.panel, sortDir)
+        case 'itemId':
+          return compareStrings(a.itemId, b.itemId, sortDir)
         case 'about':
           return compareStrings(ra.about, rb.about, sortDir)
         case 'amount':
@@ -112,10 +131,7 @@ export function usePosts(role: Role) {
     setSortKey((prev) => {
       if (prev !== key) {
         const ascFirst =
-          key === 'shopName' ||
-          key === 'productName' ||
-          key === 'about' ||
-          key === 'amount'
+          key === 'panel' || key === 'itemId' || key === 'about' || key === 'amount'
         setSortDir(ascFirst ? 'asc' : 'desc')
         return key
       }
@@ -137,52 +153,38 @@ export function usePosts(role: Role) {
   }, [paginated])
 
   const createPost = useCallback(
-    (values: PostFormValues) => {
-      const now = new Date().toISOString()
-      const cfg = getRolePostConfig(role)
-      const fields = mapFormValuesToPostFields(values, cfg)
-      const next: Post = {
-        id: makePostId(role),
-        role,
-        ...fields,
-        createdAt: now,
-        updatedAt: now,
-      }
-      setPosts((prev) => [next, ...prev])
+    async (values: PostFormValues) => {
+      const payload = formValuesToHubPostPayload(values)
+      const result = await createHubPost(payload).unwrap()
       setPage(1)
+      return result
     },
-    [role],
+    [createHubPost],
   )
 
   const updatePost = useCallback(
-    (postId: string, values: PostFormValues) => {
-      const now = new Date().toISOString()
-      const cfg = getRolePostConfig(role)
-      const fields = mapFormValuesToPostFields(values, cfg)
-      setPosts((prev) =>
-        prev.map((p) => {
-          if (p.id !== postId) return p
-          return {
-            ...p,
-            ...fields,
-            publishedAt: p.publishedAt ?? fields.publishedAt,
-            updatedAt: now,
-          }
-        }),
-      )
+    async (postId: string, values: PostFormValues) => {
+      const payload = formValuesToHubPostPayload(values)
+      return updateHubPost({ id: postId, body: payload }).unwrap()
     },
-    [role],
+    [updateHubPost],
   )
 
-  const deletePost = useCallback((postId: string) => {
-    setPosts((prev) => prev.filter((p) => p.id !== postId))
-    setSelectedIds((ids) => ids.filter((x) => x !== postId))
-  }, [])
+  const deletePost = useCallback(
+    async (postId: string) => {
+      await deleteHubPost(postId).unwrap()
+      setSelectedIds((ids) => ids.filter((x) => x !== postId))
+    },
+    [deleteHubPost],
+  )
 
-  const bulkDelete = useCallback((ids: string[]) => {
-    setPosts((prev) => prev.filter((p) => !ids.includes(p.id)))
-    clearSelection()
-  }, [clearSelection])
+  const bulkDelete = useCallback(
+    async (ids: string[]) => {
+      await Promise.all(ids.map((id) => deleteHubPost(id).unwrap()))
+      clearSelection()
+    },
+    [clearSelection, deleteHubPost],
+  )
 
   return {
     posts,
@@ -199,7 +201,11 @@ export function usePosts(role: Role) {
     total,
     totalPages,
     paginated,
-    initialLoading,
+    initialLoading: isLoading,
+    isFetching,
+    isError,
+    isSubmitting: isCreating || isUpdating,
+    isDeleting,
     selectedIds,
     toggleRow,
     selectAllVisible,

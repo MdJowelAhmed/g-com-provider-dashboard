@@ -28,6 +28,8 @@ const NAV_DESCRIPTIONS: Record<string, string> = {
   'nav.menu': 'Menu items and pricing.',
   'nav.orders': 'Incoming orders and fulfilment.',
   'nav.products': 'Product catalog and inventory.',
+  'nav.shop-management': 'Business branch locations and opening hours.',
+  'nav.business-categories': 'Business categories for products and catalog items.',
   'nav.events': 'Events you host or sell.',
   'nav.tickets': 'Ticket types and sales.',
   'nav.attendees': 'Check-in and attendee lists.',

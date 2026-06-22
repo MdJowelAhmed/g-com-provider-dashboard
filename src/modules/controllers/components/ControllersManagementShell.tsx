@@ -1,8 +1,8 @@
 import { AnimatePresence } from 'framer-motion'
-import { Modal } from 'antd'
+import { Modal, message } from 'antd'
 import { useCallback, useLayoutEffect, useState } from 'react'
 import type { Role } from '../../../types/role'
-import { useControllers } from '../hooks/useControllers'
+import { getControllerApiErrorMessage, useControllers } from '../hooks/useControllers'
 import type { StaffController } from '../types'
 import ControllerFiltersBar from './ControllerFiltersBar'
 import ControllerFormModal from './ControllerFormModal'
@@ -18,7 +18,6 @@ export default function ControllersManagementShell({
   registerOpenCreate,
 }: {
   tenantUserId: string
-  /** Matches `ROLE_META` for this workspace — controller permissions are scoped to this role */
   dashboardRole: Role
   registerOpenCreate?: (open: () => void) => void
 }) {
@@ -51,7 +50,14 @@ export default function ControllersManagementShell({
         okButtonProps: { danger: true },
         cancelText: 'Cancel',
         centered: true,
-        onOk: () => api.deleteController(row.id),
+        onOk: async () => {
+          try {
+            await api.deleteController(row.id)
+            void message.success('Controller removed successfully.')
+          } catch (error) {
+            void message.error(getControllerApiErrorMessage(error, 'Failed to remove controller.'))
+          }
+        },
       })
     },
     [api],
@@ -67,19 +73,52 @@ export default function ControllersManagementShell({
       okButtonProps: { danger: true },
       cancelText: 'Cancel',
       centered: true,
-      onOk: () => api.bulkDelete(api.selectedIds),
+      onOk: async () => {
+        try {
+          await api.bulkDelete(api.selectedIds)
+          void message.success('Selected controllers removed.')
+        } catch (error) {
+          void message.error(getControllerApiErrorMessage(error, 'Failed to remove controllers.'))
+        }
+      },
     })
   }, [api])
 
   const setRowStatus = useCallback(
-    (row: StaffController, status: StaffController['status']) => {
-      api.setControllerStatus(row.id, status)
+    async (row: StaffController, status: StaffController['status']) => {
+      try {
+        await api.setControllerStatus(row.id, status)
+        void message.success('Controller status updated.')
+      } catch (error) {
+        void message.error(getControllerApiErrorMessage(error, 'Failed to update status.'))
+      }
     },
     [api],
   )
 
+  const handleFormSubmit = async (values: Parameters<typeof api.createController>[0]) => {
+    try {
+      if (formModal.mode === 'edit' && formModal.row) {
+        await api.updateController(formModal.row.id, values)
+        void message.success('Controller updated successfully.')
+      } else {
+        await api.createController(values)
+        void message.success('Controller created successfully.')
+      }
+      setFormModal({ mode: 'closed' })
+    } catch (error) {
+      void message.error(getControllerApiErrorMessage(error, 'Something went wrong. Please try again.'))
+    }
+  }
+
   return (
     <div>
+      {api.isError ? (
+        <div className="mb-4 rounded-xl border border-accent-danger/30 bg-accent-danger/10 px-4 py-3 text-sm text-accent-danger">
+          Failed to load controllers. Please refresh and try again.
+        </div>
+      ) : null}
+
       <ControllerFiltersBar
         search={api.search}
         onSearchChange={api.setSearch}
@@ -92,9 +131,30 @@ export default function ControllersManagementShell({
           <ControllersBulkBar
             key="bulk"
             count={api.selectedIds.length}
-            onActivate={() => api.bulkSetStatus(api.selectedIds, 'active')}
-            onDeactivate={() => api.bulkSetStatus(api.selectedIds, 'inactive')}
-            onSuspend={() => api.bulkSetStatus(api.selectedIds, 'suspended')}
+            onActivate={async () => {
+              try {
+                await api.bulkSetStatus(api.selectedIds, 'active')
+                void message.success('Controllers activated.')
+              } catch (error) {
+                void message.error(getControllerApiErrorMessage(error, 'Failed to activate controllers.'))
+              }
+            }}
+            onDeactivate={async () => {
+              try {
+                await api.bulkSetStatus(api.selectedIds, 'inactive')
+                void message.success('Controllers deactivated.')
+              } catch (error) {
+                void message.error(getControllerApiErrorMessage(error, 'Failed to deactivate controllers.'))
+              }
+            }}
+            onSuspend={async () => {
+              try {
+                await api.bulkSetStatus(api.selectedIds, 'suspended')
+                void message.success('Controllers suspended.')
+              } catch (error) {
+                void message.error(getControllerApiErrorMessage(error, 'Failed to suspend controllers.'))
+              }
+            }}
             onDelete={confirmBulkDelete}
             onClear={api.clearSelection}
           />
@@ -117,7 +177,7 @@ export default function ControllersManagementShell({
         someOnPageSelected={someOnPageSelected}
         onEdit={(row) => setFormModal({ mode: 'edit', row })}
         onDelete={confirmDelete}
-        onSetStatus={setRowStatus}
+        onSetStatus={(row, status) => void setRowStatus(row, status)}
       />
 
       <ControllerPagination
@@ -132,16 +192,10 @@ export default function ControllersManagementShell({
         open={formModal.mode !== 'closed'}
         mode={formModal.mode === 'edit' ? 'edit' : 'create'}
         dashboardRole={dashboardRole}
+        loading={api.isSaving}
         initial={formModal.mode === 'edit' ? formModal.row ?? null : null}
         onCancel={() => setFormModal({ mode: 'closed' })}
-        onSubmit={(values) => {
-          if (formModal.mode === 'edit' && formModal.row) {
-            api.updateController(formModal.row.id, values)
-          } else {
-            api.createController(values)
-          }
-          setFormModal({ mode: 'closed' })
-        }}
+        onSubmit={(values) => void handleFormSubmit(values)}
       />
     </div>
   )

@@ -11,8 +11,24 @@ import ListPage from './pages/dashboard/ListPage'
 import LegalHubPage from './pages/dashboard/legal/LegalHubPage'
 import LegalDocumentPage from './pages/dashboard/legal/LegalDocumentPage'
 import ProtectedRoute from './routing/ProtectedRoute'
-import { AUTH_STORAGE_KEYS } from './auth/session'
-import { getDashboardPath, normalizeUserRole } from './routing/roleRedirect'
+import { readStoredUser } from './auth/userProfile'
+import { decodeJwtPayload } from './auth/jwt'
+import { getDashboardPath } from './routing/roleRedirect'
+
+function DashboardRedirect() {
+  const storedUser = readStoredUser()
+  if (storedUser?.role) {
+    return <Navigate to={getDashboardPath(storedUser.role)} replace />
+  }
+
+  const token = localStorage.getItem('token')
+  if (!token) return <Navigate to="/login" replace />
+
+  const claims = decodeJwtPayload(token)
+  if (!claims?.role) return <Navigate to="/login" replace />
+
+  return <Navigate to={getDashboardPath(claims.role)} replace />
+}
 
 export default function App() {
   return (
@@ -40,16 +56,4 @@ export default function App() {
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
   )
-}
-
-function DashboardRedirect() {
-  try {
-    const raw = localStorage.getItem(AUTH_STORAGE_KEYS.currentUser)
-    if (!raw) return <Navigate to="/login" replace />
-    const parsed = JSON.parse(raw) as { role?: unknown }
-    const role = normalizeUserRole(parsed.role)
-    return <Navigate to={getDashboardPath(role)} replace />
-  } catch {
-    return <Navigate to="/login" replace />
-  }
 }

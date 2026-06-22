@@ -1,4 +1,5 @@
 import type { User } from '../../types/user'
+import { resolveRoleForMeta } from '../../routing/roleRedirect'
 import { ALL_NAV_PERMISSION_IDS, tabSegmentToNavPermissionId } from './navPermissionMap'
 import { navPathToPermissionId } from './registry'
 
@@ -47,6 +48,6 @@ export function hasNavAccess(user: User, navPath: string): boolean {
 export function canAccessDashboardTab(user: User | null, tab: string | undefined): boolean {
   if (!user) return false
   const segment = tab ?? ''
-  const id = tabSegmentToNavPermissionId(user.role, segment)
+  const id = tabSegmentToNavPermissionId(resolveRoleForMeta(user.role), segment)
   return hasPermission(user, id)
 }

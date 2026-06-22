@@ -1,19 +1,21 @@
 import { FileText, Plus } from 'lucide-react'
 import { useCallback, useRef } from 'react'
 import { useAuth } from '../../../context/AuthContext'
+import { useDashboardRole } from '../../../auth/useDashboardRole'
 import { getRolePostConfig } from '../../../modules/posts/config/rolePostConfig'
 import PostsManagementShell from '../../../modules/posts/components/PostsManagementShell'
 import PageHeader from '../../../components/dashboard/PageHeader'
 
 export default function PostsPage() {
   const { user } = useAuth()
+  const dashboardRole = useDashboardRole()
   const openCreateRef = useRef<() => void>(() => {})
   const registerOpenCreate = useCallback((fn: () => void) => {
     openCreateRef.current = fn
   }, [])
   if (!user) return null
 
-  const copy = getRolePostConfig(user.role)
+  const copy = getRolePostConfig(dashboardRole)
 
   return (
     <div>
@@ -36,7 +38,7 @@ export default function PostsPage() {
           </div>
         }
       />
-      <PostsManagementShell role={user.role} registerOpenCreate={registerOpenCreate} />
+      <PostsManagementShell role={dashboardRole} registerOpenCreate={registerOpenCreate} />
     </div>
   )
 }

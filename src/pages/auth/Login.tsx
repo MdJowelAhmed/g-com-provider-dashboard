@@ -1,73 +1,60 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import type { FetchBaseQueryError } from '@reduxjs/toolkit/query'
 import AuthLayout from '../../layouts/AuthLayout'
 import AuthCard from '../../components/auth/AuthCard'
 import AuthIllustration from '../../components/auth/AuthIllustration'
 import FormField from '../../components/auth/FormField'
-import FormSelect from '../../components/auth/FormSelect'
 import PasswordField from '../../components/auth/PasswordField'
 import PrimaryButton from '../../components/auth/PrimaryButton'
+import { mapUserProfileToUser } from '../../auth/userProfile'
 import { useAuth } from '../../context/AuthContext'
+import { useLazyGetMyProfileQuery, useLoginMutation } from '../../redux/api/authApi'
 import { getDashboardPath } from '../../routing/roleRedirect'
-import { ROLES, type Role } from '../../types/role'
 
-const LAST_LOGIN_ROLE_KEY = 'gcom.lastLoginRole'
-
-const LOGIN_ROLE_OPTIONS: { value: Role; label: string }[] = [
-  { value: 'services', label: 'Service Provider' },
-  { value: 'stay', label: 'Stay (Hotel)' },
-  { value: 'dine', label: 'Dine (Restaurant)' },
-  { value: 'shops', label: 'Shops (E-commerce)' },
-  { value: 'events', label: 'Events' },
-]
-
-function readStoredRole(): Role | '' {
-  try {
-    const raw = localStorage.getItem(LAST_LOGIN_ROLE_KEY)
-    if (raw && ROLES.includes(raw as Role)) return raw as Role
-  } catch {
-    /* ignore */
+function getLoginErrorMessage(error: unknown): string {
+  if (error && typeof error === 'object' && 'data' in error) {
+    const data = (error as FetchBaseQueryError).data
+    if (data && typeof data === 'object' && 'message' in data) {
+      const message = (data as { message?: unknown }).message
+      if (typeof message === 'string' && message.trim()) return message
+    }
   }
-  return ''
+  return 'Invalid email or password. Please try again.'
 }
 
 export default function Login() {
   const navigate = useNavigate()
-  const { loginWithRole } = useAuth()
-  const [accountType, setAccountType] = useState<Role | ''>(() => readStoredRole())
+  const { setUserFromProfile } = useAuth()
+  const [login, { isLoading: loggingIn }] = useLoginMutation()
+  const [fetchProfile, { isFetching: loadingProfile }] = useLazyGetMyProfileQuery()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const [submitting, setSubmitting] = useState(false)
+
+  const isLoading = loggingIn || loadingProfile
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault()
     setError(null)
 
-    if (!accountType) {
-      setError('Please select your account type to continue.')
-      return
-    }
-
-    setSubmitting(true)
-    await new Promise((r) => setTimeout(r, 320))
-
     try {
-      const user = loginWithRole(email.trim(), accountType)
-      if (!user) {
-        setError('No provider found with this email. Please register first.')
+      await login({
+        email: email.trim(),
+        password,
+      }).unwrap()
+
+      const profileResponse = await fetchProfile().unwrap()
+      if (!profileResponse.success || !profileResponse.data) {
+        setError('Signed in, but profile could not be loaded. Please try again.')
         return
       }
 
-      try {
-        localStorage.setItem(LAST_LOGIN_ROLE_KEY, accountType)
-      } catch {
-        /* ignore */
-      }
-
-      navigate(getDashboardPath(accountType), { replace: true })
-    } finally {
-      setSubmitting(false)
+      const user = mapUserProfileToUser(profileResponse.data)
+      setUserFromProfile(user)
+      navigate(getDashboardPath(user.role), { replace: true })
+    } catch (err) {
+      setError(getLoginErrorMessage(err))
     }
   }
 
@@ -77,18 +64,6 @@ export default function Login() {
     >
       <AuthCard description="Welcome back! Please enter your details.">
         <form onSubmit={onSubmit} className="space-y-5">
-          <FormSelect
-            label="Account Type"
-            name="accountType"
-            value={accountType}
-            onChange={(e) => setAccountType((e.target.value as Role) || '')}
-            optionItems={LOGIN_ROLE_OPTIONS}
-            placeholderOption="Select account type"
-            required={false}
-            disabled={submitting}
-            aria-required="true"
-          />
-
           <FormField
             label="Email"
             type="email"
@@ -98,7 +73,7 @@ export default function Login() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
-            disabled={submitting}
+            disabled={isLoading}
           />
 
           <div>
@@ -109,7 +84,7 @@ export default function Login() {
               value={password}
               onChange={setPassword}
               placeholder="Enter your password"
-              disabled={submitting}
+              disabled={isLoading}
             />
             <div className="mt-2 text-right">
               <Link
@@ -123,8 +98,8 @@ export default function Login() {
 
           {error && <p className="text-xs text-accent-danger">{error}</p>}
 
-          <PrimaryButton type="submit" disabled={submitting}>
-            {submitting ? 'Signing in…' : 'Sign in'}
+          <PrimaryButton type="submit" disabled={isLoading}>
+            {isLoading ? 'Signing in…' : 'Sign in'}
           </PrimaryButton>
 
           <p className="text-center text-xs text-gray-400">

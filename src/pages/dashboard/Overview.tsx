@@ -19,6 +19,7 @@ import {
   Wallet,
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
+import { useDashboardRole } from '../../auth/useDashboardRole'
 import { ROLE_META } from '../../config/roleConfig'
 import { hasNavAccess, hasPermission } from '../../modules/permissions/resolver'
 import { navItemToPermissionId } from '../../modules/permissions/navPermissionMap'
@@ -66,11 +67,12 @@ function shortDate(iso: string) {
 
 export default function Overview() {
   const { user } = useAuth()
+  const dashboardRole = useDashboardRole()
   const [range, setRange] = useState<RangeKey>('30d')
 
   if (!user) return null
 
-  const meta = ROLE_META[user.role]
+  const meta = ROLE_META[dashboardRole]
 
   if (!hasNavAccess(user, '')) {
     const fallback = meta.navItems.find((item) => hasPermission(user, navItemToPermissionId(item)))
@@ -79,9 +81,9 @@ export default function Overview() {
     }
   }
 
-  const ui = OVERVIEW_UI[user.role]
-  const mock = ROLE_MOCK[user.role]
-  const overview = OVERVIEW_DATA[user.role]
+  const ui = OVERVIEW_UI[dashboardRole]
+  const mock = ROLE_MOCK[dashboardRole]
+  const overview = OVERVIEW_DATA[dashboardRole]
   const RoleIcon = meta.icon
 
   const rangedTrend = useMemo(
@@ -250,7 +252,7 @@ export default function Overview() {
           </div>
         </div>
 
-        <PayoutCard role={user.role} />
+        <PayoutCard role={dashboardRole} />
       </div>
 
       <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">

@@ -6,6 +6,8 @@ export function seedControllersForTenant(tenantUserId: string, dashboardRole: Ro
 
   const servicesKeys: string[] = [
     'nav.overview',
+    'nav.shop-management',
+    'nav.business-categories',
     'nav.services',
     'nav.bookings',
     'nav.messages',
@@ -14,6 +16,8 @@ export function seedControllersForTenant(tenantUserId: string, dashboardRole: Ro
 
   const stayKeys: string[] = [
     'nav.overview',
+    'nav.shop-management',
+    'nav.business-categories',
     'nav.rooms',
     'nav.reservations',
     'nav.guests',
@@ -22,6 +26,8 @@ export function seedControllersForTenant(tenantUserId: string, dashboardRole: Ro
 
   const dineKeys: string[] = [
     'nav.overview',
+    'nav.shop-management',
+    'nav.business-categories',
     'nav.menu',
     'nav.orders',
     'nav.messages',
@@ -29,6 +35,8 @@ export function seedControllersForTenant(tenantUserId: string, dashboardRole: Ro
 
   const shopsKeys: string[] = [
     'nav.overview',
+    'nav.shop-management',
+    'nav.business-categories',
     'nav.products',
     'nav.orders',
     'nav.customers',
@@ -37,6 +45,8 @@ export function seedControllersForTenant(tenantUserId: string, dashboardRole: Ro
 
   const eventsKeys: string[] = [
     'nav.overview',
+    'nav.shop-management',
+    'nav.business-categories',
     'nav.events',
     'nav.tickets',
     'nav.messages',

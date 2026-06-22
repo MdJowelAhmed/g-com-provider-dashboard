@@ -1,43 +1,20 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
+import type { FetchBaseQueryError } from '@reduxjs/toolkit/query'
 import type { Role } from '../../../types/role'
-import { clampPermissionKeysForRole } from '../../permissions/navPermissionMap'
+import { clampPermissionKeysForRole, getAllowedNavPermissionIdsForRole } from '../../permissions/navPermissionMap'
+import {
+  useCreateControllerMutation,
+  useDeleteControllerMutation,
+  useGetControllersQuery,
+  useUpdateControllerMutation,
+} from '../../../redux/api/controllerApi'
 import { ALL_FILTER, DEFAULT_PAGE_SIZE } from '../constants'
-import { seedControllersForTenant } from '../mock/seedControllers'
-import type {
-  ControllerFormValues,
-  SortDir,
-  SortKey,
-  StaffController,
-} from '../types'
-
-const STORAGE_PREFIX = 'gcom.controllers.v1'
-
-function storeKey(tenantId: string) {
-  return `${STORAGE_PREFIX}.${tenantId}`
-}
-
-function readStore(tenantId: string): StaffController[] {
-  try {
-    const raw = localStorage.getItem(storeKey(tenantId))
-    if (!raw) return []
-    const parsed = JSON.parse(raw) as StaffController[]
-    return Array.isArray(parsed) ? parsed : []
-  } catch {
-    return []
-  }
-}
-
-function writeStore(tenantId: string, rows: StaffController[]) {
-  localStorage.setItem(storeKey(tenantId), JSON.stringify(rows))
-}
-
-function makeId(tenantId: string) {
-  const base =
-    typeof crypto !== 'undefined' && 'randomUUID' in crypto
-      ? crypto.randomUUID().slice(0, 10)
-      : Date.now().toString(36)
-  return `ctl_${tenantId.slice(0, 6)}_${base}`
-}
+import {
+  formValuesToCreatePayload,
+  formValuesToUpdatePayload,
+  mapControllerFromApi,
+} from '../permissionMapping'
+import type { ControllerFormValues, SortDir, SortKey, StaffController } from '../types'
 
 function compareStrings(a: string, b: string, dir: SortDir) {
   const cmp = a.localeCompare(b, undefined, { sensitivity: 'base' })
@@ -49,26 +26,22 @@ function compareTime(a: string, b: string, dir: SortDir) {
   return dir === 'asc' ? cmp : -cmp
 }
 
+export function getControllerApiErrorMessage(error: unknown, fallback: string) {
+  if (error && typeof error === 'object' && 'data' in error) {
+    const data = (error as FetchBaseQueryError).data
+    if (data && typeof data === 'object') {
+      const payload = data as { message?: unknown; errorMessages?: { message?: string }[] }
+      if (typeof payload.message === 'string' && payload.message.trim()) {
+        return payload.message
+      }
+      const first = payload.errorMessages?.[0]?.message
+      if (first?.trim()) return first
+    }
+  }
+  return fallback
+}
+
 export function useControllers(tenantUserId: string, dashboardRole: Role) {
-  const [rows, setRows] = useState<StaffController[]>(() => {
-    const existing = readStore(tenantUserId)
-    if (existing.length > 0) return existing
-    const seed = seedControllersForTenant(tenantUserId, dashboardRole)
-    writeStore(tenantUserId, seed)
-    return seed
-  })
-
-  const persist = useCallback(
-    (updater: (prev: StaffController[]) => StaffController[]) => {
-      setRows((prev) => {
-        const next = updater(prev)
-        writeStore(tenantUserId, next)
-        return next
-      })
-    },
-    [tenantUserId],
-  )
-
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>(ALL_FILTER)
   const [sortKey, setSortKey] = useState<SortKey>('updatedAt')
@@ -76,12 +49,24 @@ export function useControllers(tenantUserId: string, dashboardRole: Role) {
   const [page, setPage] = useState(1)
   const [pageSize] = useState(DEFAULT_PAGE_SIZE)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
-  const [initialLoading, setInitialLoading] = useState(true)
 
-  useEffect(() => {
-    const t = window.setTimeout(() => setInitialLoading(false), 420)
-    return () => window.clearTimeout(t)
-  }, [])
+  const { data, isLoading, isFetching, isError } = useGetControllersQuery({
+    page: 1,
+    limit: 100,
+  })
+  const [createController, { isLoading: isCreating }] = useCreateControllerMutation()
+  const [updateController, { isLoading: isUpdating }] = useUpdateControllerMutation()
+  const [deleteController, { isLoading: isDeleting }] = useDeleteControllerMutation()
+
+  const roleNavIds = useMemo(
+    () => getAllowedNavPermissionIdsForRole(dashboardRole),
+    [dashboardRole],
+  )
+
+  const rows = useMemo(
+    () => (data?.data ?? []).map((doc) => mapControllerFromApi(doc, tenantUserId, roleNavIds)),
+    [data?.data, tenantUserId, roleNavIds],
+  )
 
   const filteredSorted = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -146,89 +131,62 @@ export function useControllers(tenantUserId: string, dashboardRole: Role) {
     setSelectedIds(paginated.map((p) => p.id))
   }, [paginated])
 
-  const createController = useCallback(
-    (values: ControllerFormValues) => {
-      const now = new Date().toISOString()
-      const next: StaffController = {
-        id: makeId(tenantUserId),
-        tenantUserId,
-        displayName: values.displayName.trim(),
-        email: values.email.trim().toLowerCase(),
-        roleLabel: values.roleLabel.trim(),
-        status: values.status,
-        permissionKeys: clampPermissionKeysForRole([...new Set(values.permissionKeys)], dashboardRole),
-        createdAt: now,
-        updatedAt: now,
-      }
-      persist((prev) => [next, ...prev])
+  const withClampedPermissions = useCallback(
+    (values: ControllerFormValues): ControllerFormValues => ({
+      ...values,
+      permissionKeys: clampPermissionKeysForRole([...new Set(values.permissionKeys)], dashboardRole),
+    }),
+    [dashboardRole],
+  )
+
+  const createControllerRow = useCallback(
+    async (values: ControllerFormValues) => {
+      const payload = formValuesToCreatePayload(withClampedPermissions(values))
+      await createController(payload).unwrap()
       setPage(1)
     },
-    [persist, tenantUserId, dashboardRole],
+    [createController, withClampedPermissions],
   )
 
-  const updateController = useCallback(
-    (id: string, values: ControllerFormValues) => {
-      const now = new Date().toISOString()
-      persist((rows) =>
-        rows.map((r) =>
-          r.id === id
-            ? {
-                ...r,
-                displayName: values.displayName.trim(),
-                email: values.email.trim().toLowerCase(),
-                roleLabel: values.roleLabel.trim(),
-                status: values.status,
-                permissionKeys: clampPermissionKeysForRole([...new Set(values.permissionKeys)], dashboardRole),
-                updatedAt: now,
-              }
-            : r,
-        ),
-      )
+  const updateControllerRow = useCallback(
+    async (id: string, values: ControllerFormValues) => {
+      const body = formValuesToUpdatePayload(withClampedPermissions(values))
+      await updateController({ id, body }).unwrap()
     },
-    [persist, dashboardRole],
+    [updateController, withClampedPermissions],
   )
 
-  const deleteController = useCallback(
-    (id: string) => {
-      persist((rows) => rows.filter((r) => r.id !== id))
+  const deleteControllerRow = useCallback(
+    async (id: string) => {
+      await deleteController(id).unwrap()
       setSelectedIds((s) => s.filter((x) => x !== id))
     },
-    [persist],
+    [deleteController],
   )
 
   const bulkDelete = useCallback(
-    (ids: string[]) => {
-      const set = new Set(ids)
-      persist((rows) => rows.filter((r) => !set.has(r.id)))
+    async (ids: string[]) => {
+      await Promise.all(ids.map((id) => deleteController(id).unwrap()))
       clearSelection()
     },
-    [persist, clearSelection],
+    [deleteController, clearSelection],
   )
 
   const bulkSetStatus = useCallback(
-    (ids: string[], status: StaffController['status']) => {
-      const now = new Date().toISOString()
-      const set = new Set(ids)
-      persist((rows) =>
-        rows.map((r) =>
-          set.has(r.id) ? { ...r, status, updatedAt: now } : r,
-        ),
+    async (ids: string[], status: StaffController['status']) => {
+      await Promise.all(
+        ids.map((id) => updateController({ id, body: { status } }).unwrap()),
       )
       clearSelection()
     },
-    [persist, clearSelection],
+    [updateController, clearSelection],
   )
 
   const setControllerStatus = useCallback(
-    (id: string, status: StaffController['status']) => {
-      const now = new Date().toISOString()
-      persist((rows) =>
-        rows.map((r) =>
-          r.id === id ? { ...r, status, updatedAt: now } : r,
-        ),
-      )
+    async (id: string, status: StaffController['status']) => {
+      await updateController({ id, body: { status } }).unwrap()
     },
-    [persist],
+    [updateController],
   )
 
   return {
@@ -249,10 +207,12 @@ export function useControllers(tenantUserId: string, dashboardRole: Role) {
     toggleRow,
     selectAllVisible,
     clearSelection,
-    initialLoading,
-    createController,
-    updateController,
-    deleteController,
+    initialLoading: isLoading || isFetching,
+    isError,
+    isSaving: isCreating || isUpdating || isDeleting,
+    createController: createControllerRow,
+    updateController: updateControllerRow,
+    deleteController: deleteControllerRow,
     bulkDelete,
     bulkSetStatus,
     setControllerStatus,

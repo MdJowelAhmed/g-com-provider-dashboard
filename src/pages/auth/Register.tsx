@@ -14,7 +14,7 @@ import StepIndicator from '../../components/auth/StepIndicator'
 import { ROLES, type Role } from '../../types/role'
 import { ROLE_META, type FieldDef } from '../../config/roleConfig'
 import { useAuth } from '../../context/AuthContext'
-import { getDashboardPath } from '../../routing/roleRedirect'
+import { getDashboardPath, resolveRoleForMeta } from '../../routing/roleRedirect'
 
 const STEPS = ['Category', 'Details', 'Payment', 'Done']
 
@@ -243,7 +243,7 @@ export default function Register() {
                 Welcome, {user.businessName || user.ownerName}!
               </div>
               <p className="mt-1 text-sm text-gray-400">
-                Your {ROLE_META[user.role].label.toLowerCase()} account is ready.
+                Your {ROLE_META[resolveRoleForMeta(user.role)].label.toLowerCase()} account is ready.
                 {user.stripeConnected
                   ? ' Stripe is connected.'
                   : ' Finish Stripe later from Settings.'}

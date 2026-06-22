@@ -1,4 +1,4 @@
-export type ControllerStatus = 'active' | 'inactive' | 'suspended'
+export type ControllerStatus = 'active' | 'inactive' | 'suspended' | 'pending'
 
 export type StaffController = {
   id: string

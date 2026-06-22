@@ -1,6 +1,7 @@
 import { Plus } from 'lucide-react'
 import { Navigate, useParams } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
+import { useDashboardRole } from '../../auth/useDashboardRole'
 import { canAccessDashboardTab } from '../../modules/permissions/resolver'
 import { ROLE_MOCK } from '../../data/mockData'
 import PageHeader from '../../components/dashboard/PageHeader'
@@ -8,6 +9,8 @@ import DataTable from '../../components/dashboard/DataTable'
 import ProductsPage from './shops/ProductsPage'
 import OrdersPage from './shops/OrdersPage'
 import CustomersPage from './shops/CustomersPage'
+import ShopManagementPage from './shops/ShopManagementPage'
+import BusinessCategoriesPage from './business-categories/BusinessCategoriesPage'
 import ServicesPage from './services/ServicesPage'
 import BookingsPage from './services/BookingsPage'
 import ServiceCustomersPage from './services/CustomersPage'
@@ -28,6 +31,7 @@ import ControllersPage from './controllers/ControllersPage'
 
 export default function ListPage() {
   const { user } = useAuth()
+  const dashboardRole = useDashboardRole()
   const { tab } = useParams<{ tab: string }>()
 
   if (!user) return null
@@ -60,63 +64,71 @@ export default function ListPage() {
     return <ControllersPage />
   }
 
-  if (user.role === 'services' && tab === 'services') {
+  if (tab === 'shop-management') {
+    return <ShopManagementPage />
+  }
+
+  if (tab === 'business-categories') {
+    return <BusinessCategoriesPage />
+  }
+
+  if (dashboardRole === 'services' && tab === 'services') {
     return <ServicesPage />
   }
 
-  if (user.role === 'services' && tab === 'bookings') {
+  if (dashboardRole === 'services' && tab === 'bookings') {
     return <BookingsPage />
   }
 
-  if (user.role === 'services' && tab === 'customers') {
+  if (dashboardRole === 'services' && tab === 'customers') {
     return <ServiceCustomersPage />
   }
 
-  if (user.role === 'stay' && tab === 'rooms') {
+  if (dashboardRole === 'stay' && tab === 'rooms') {
     return <RoomsPage />
   }
 
-  if (user.role === 'stay' && tab === 'reservations') {
+  if (dashboardRole === 'stay' && tab === 'reservations') {
     return <StayBookingsPage />
   }
 
-  if (user.role === 'stay' && tab === 'guests') {
+  if (dashboardRole === 'stay' && tab === 'guests') {
     return <GuestsPage />
   }
 
-  if (user.role === 'dine' && tab === 'menu') {
+  if (dashboardRole === 'dine' && tab === 'menu') {
     return <MenuPage />
   }
 
-  if (user.role === 'dine' && tab === 'orders') {
+  if (dashboardRole === 'dine' && tab === 'orders') {
     return <DineOrdersPage />
   }
 
-  if (user.role === 'events' && tab === 'events') {
+  if (dashboardRole === 'events' && tab === 'events') {
     return <EventsPage />
   }
 
-  if (user.role === 'events' && tab === 'tickets') {
+  if (dashboardRole === 'events' && tab === 'tickets') {
     return <TicketsPage />
   }
 
-  if (user.role === 'events' && tab === 'attendees') {
+  if (dashboardRole === 'events' && tab === 'attendees') {
     return <AttendeesPage />
   }
 
-  if (user.role === 'shops' && tab === 'products') {
+  if (dashboardRole === 'shops' && tab === 'products') {
     return <ProductsPage />
   }
 
-  if (user.role === 'shops' && tab === 'orders') {
+  if (dashboardRole === 'shops' && tab === 'orders') {
     return <OrdersPage />
   }
 
-  if (user.role === 'shops' && tab === 'customers') {
+  if (dashboardRole === 'shops' && tab === 'customers') {
     return <CustomersPage />
   }
 
-  const mock = ROLE_MOCK[user.role]
+  const mock = ROLE_MOCK[dashboardRole]
   const table = tab ? mock.tables[tab] : undefined
 
   if (!table) return <Navigate to={`/dashboard/${user.role}`} replace />

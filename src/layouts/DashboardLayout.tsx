@@ -2,18 +2,25 @@ import { Outlet, useNavigate } from 'react-router-dom'
 import Sidebar from '../components/dashboard/Sidebar'
 import Topbar from '../components/dashboard/Topbar'
 import { useAuth } from '../context/AuthContext'
+import { useLogoutMutation } from '../redux/api/authApi'
 import { ROLE_META } from '../config/roleConfig'
+import { resolveRoleForMeta } from '../routing/roleRedirect'
 
 export default function DashboardLayout() {
   const { user, logout } = useAuth()
+  const [logoutApi] = useLogoutMutation()
   const navigate = useNavigate()
 
   if (!user) return null
 
-  const meta = ROLE_META[user.role]
+  const meta = ROLE_META[resolveRoleForMeta(user.role)]
 
-  const handleLogout = () => {
-    logout()
+  const handleLogout = async () => {
+    try {
+      await logoutApi().unwrap()
+    } catch {
+      logout()
+    }
     navigate('/login', { replace: true })
   }
 

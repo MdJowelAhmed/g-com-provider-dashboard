@@ -1,139 +1,83 @@
-export type ServiceStatus = 'active' | 'draft' | 'archived'
+import type { ServicePricingType } from '../../../redux/api/serviceApi'
 
-export type PricingType = 'fixed' | 'hourly' | 'starting_from' | 'quote'
+export type PricingType = ServicePricingType
 
-export type LocationType = 'on_site' | 'at_provider' | 'remote'
+/** Platform category slug for sub-categories API (`?category=`). */
+export type PlatformCategory = 'services' | 'stay' | 'dine' | 'shop' | 'event'
+
+export const PLATFORM_CATEGORIES: PlatformCategory[] = [
+  'services',
+  'stay',
+  'dine',
+  'shop',
+  'event',
+]
+
+export const PLATFORM_CATEGORY_OPTIONS: { value: PlatformCategory; label: string }[] = [
+  { value: 'services', label: 'Services' },
+  { value: 'stay', label: 'Stay' },
+  { value: 'dine', label: 'Dine' },
+  { value: 'shop', label: 'Shop' },
+  { value: 'event', label: 'Event' },
+]
+
+export function dashboardRoleToPlatformCategory(role: string): PlatformCategory {
+  const key = role.trim().toLowerCase()
+  const map: Record<string, PlatformCategory> = {
+    services: 'services',
+    service: 'services',
+    stay: 'stay',
+    hotel: 'stay',
+    dine: 'dine',
+    restaurant: 'dine',
+    shops: 'shop',
+    shop: 'shop',
+    events: 'event',
+    event: 'event',
+  }
+  return map[key] ?? 'services'
+}
+
+export function businessCategoryToPlatformCategory(category: string | undefined): PlatformCategory {
+  if (!category?.trim()) return 'services'
+  return dashboardRoleToPlatformCategory(category)
+}
 
 export type Service = {
   id: string
-  image: string
   name: string
-  code: string
-  category: string
-  shortDescription: string
+  serviceCode: string
+  subCategoryId: string
+  businessCategoryId: string
+  branchId: string
   description: string
-
   pricingType: PricingType
   price: number
-  salePrice?: number | null
-
-  durationMinutes: number
-  bufferMinutes: number
-
-  serviceArea: string
-  locationType: LocationType
-  staffRequired: number
-  warrantyDays?: number | null
-
-  advanceBookingHours: number
-  maxBookingsPerDay?: number | null
-  cancellationPolicy: string
-
-  includes: string
-  excludes: string
-  addons: string
-  tags: string
-
-  status: ServiceStatus
-  featured: boolean
-  hidden: boolean
+  duration: string
+  maxBookingPerDay: number
+  image: string
+  status: string
   createdAt: string
+  updatedAt: string
 }
 
-export const SERVICE_CATEGORIES = [
-  'Cleaning',
-  'Plumbing',
-  'Electrical',
-  'Beauty',
-  'Handyman',
-  'HVAC',
-  'Gardening',
-  'Moving',
-  'Appliance Repair',
-  'Pest Control',
-  'Other',
-]
-
-export const SERVICE_STATUS_OPTIONS: { value: ServiceStatus; label: string }[] = [
-  { value: 'active', label: 'Active' },
-  { value: 'draft', label: 'Draft' },
-  { value: 'archived', label: 'Archived' },
-]
+export type ServiceFormValues = {
+  name: string
+  serviceCode: string
+  platformCategory: PlatformCategory | ''
+  subCategory: string
+  businessCategory: string
+  description: string
+  pricingType: PricingType
+  price: number
+  duration: string
+  maxBookingPerDay: number
+  branch: string
+  image: string
+}
 
 export const PRICING_TYPE_OPTIONS: { value: PricingType; label: string }[] = [
   { value: 'fixed', label: 'Fixed price' },
-  { value: 'hourly', label: 'Per hour' },
-  { value: 'starting_from', label: 'Starting from' },
-  { value: 'quote', label: 'Request a quote' },
-]
-
-export const LOCATION_TYPE_OPTIONS: { value: LocationType; label: string }[] = [
-  { value: 'on_site', label: "At customer's location" },
-  { value: 'at_provider', label: 'At our location' },
-  { value: 'remote', label: 'Remote / online' },
-]
-
-export const INITIAL_SERVICES: Service[] = [
-  {
-    id: 's_1001',
-    image:
-      'https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&w=200&q=80',
-    name: 'Deep home cleaning',
-    code: 'CLN-DEEP',
-    category: 'Cleaning',
-    shortDescription: 'Top-to-bottom cleaning for apartments and homes.',
-    description:
-      'Thorough cleaning of kitchens, bathrooms, bedrooms and living areas. Includes appliance exteriors, baseboards and windows.',
-    pricingType: 'fixed',
-    price: 120,
-    salePrice: null,
-    durationMinutes: 180,
-    bufferMinutes: 30,
-    serviceArea: 'Downtown, 10km radius',
-    locationType: 'on_site',
-    staffRequired: 2,
-    warrantyDays: 3,
-    advanceBookingHours: 12,
-    maxBookingsPerDay: 4,
-    cancellationPolicy: 'Free cancellation up to 6 hours before the appointment.',
-    includes: 'Vacuuming, Mopping, Bathroom scrub, Kitchen degrease',
-    excludes: 'Laundry, Dishwashing',
-    addons: 'Window cleaning, Fridge interior, Oven interior',
-    tags: 'cleaning, deep, home',
-    status: 'active',
-    featured: true,
-    hidden: false,
-    createdAt: '2026-03-04T09:10:00.000Z',
-  },
-  {
-    id: 's_1002',
-    image:
-      'https://images.unsplash.com/photo-1621905251189-08b45d6a269e?auto=format&fit=crop&w=200&q=80',
-    name: 'AC servicing & gas refill',
-    code: 'AC-SVC',
-    category: 'HVAC',
-    shortDescription: 'Full AC check, coil clean and gas top-up.',
-    description:
-      'Technician inspects compressor, cleans condenser and evaporator coils, checks pressure and refills refrigerant if needed.',
-    pricingType: 'starting_from',
-    price: 75,
-    salePrice: 59,
-    durationMinutes: 60,
-    bufferMinutes: 15,
-    serviceArea: 'All city zones',
-    locationType: 'on_site',
-    staffRequired: 1,
-    warrantyDays: 30,
-    advanceBookingHours: 4,
-    maxBookingsPerDay: 8,
-    cancellationPolicy: 'Free cancellation up to 2 hours before the appointment.',
-    includes: 'Inspection, Coil cleaning, Pressure check',
-    excludes: 'Compressor replacement, Spare parts',
-    addons: 'Gas refill (R32), Deep coil wash',
-    tags: 'ac, hvac, maintenance',
-    status: 'active',
-    featured: false,
-    hidden: false,
-    createdAt: '2026-02-18T14:40:00.000Z',
-  },
+  { value: 'per_hour', label: 'Per hour' },
+  { value: 'request_a_quote', label: 'Request a quote' },
 ]

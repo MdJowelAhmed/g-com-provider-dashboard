@@ -8,15 +8,16 @@ import {
 } from '../../permissions/navPermissionMap'
 import type { Role } from '../../../types/role'
 import { CONTROLLER_MODAL_BASE_STATUS_OPTIONS } from '../constants'
+import { isNavPermissionMappable } from '../permissionMapping'
 import type { ControllerFormValues, ControllerStatus, StaffController } from '../types'
 import PermissionsSection from './permission/PermissionsSection'
 
 type Props = {
   open: boolean
   mode: 'create' | 'edit'
-  /** Tenant dashboard role — permission list matches this sidebar */
   dashboardRole: Role
   initial?: StaffController | null
+  loading?: boolean
   onCancel: () => void
   onSubmit: (values: ControllerFormValues) => void
 }
@@ -51,13 +52,25 @@ export default function ControllerFormModal({
   mode,
   dashboardRole,
   initial,
+  loading,
   onCancel,
   onSubmit,
 }: Props) {
   const [form] = Form.useForm<FormShape>()
   const [permSet, setPermSet] = useState<Set<string>>(() => new Set())
 
-  const permissionGroups = useMemo(() => getNavPermissionGroupsForRole(dashboardRole), [dashboardRole])
+  const permissionGroups = useMemo(
+    () =>
+      getNavPermissionGroupsForRole(dashboardRole)
+        .map((group) => ({
+          ...group,
+          permissions: group.permissions.filter((permission) =>
+            isNavPermissionMappable(permission.id),
+          ),
+        }))
+        .filter((group) => group.permissions.length > 0),
+    [dashboardRole],
+  )
 
   const allIds = useMemo(
     () => permissionGroups.flatMap((g) => g.permissions.map((p) => p.id)),
@@ -66,10 +79,14 @@ export default function ControllerFormModal({
 
   const statusOptions = useMemo((): { value: ControllerStatus; label: string }[] => {
     const base = CONTROLLER_MODAL_BASE_STATUS_OPTIONS.map((o) => ({ ...o }))
-    if (mode === 'edit' && initial?.status === 'suspended') {
-      return [...base, { value: 'suspended' as const, label: 'Suspended' }]
+    const extra: { value: ControllerStatus; label: string }[] = []
+    if (mode === 'edit' && initial?.status === 'pending') {
+      extra.push({ value: 'pending', label: 'Pending' })
     }
-    return base
+    if (mode === 'edit' && initial?.status === 'suspended') {
+      extra.push({ value: 'suspended', label: 'Suspended' })
+    }
+    return [...base, ...extra]
   }, [mode, initial])
 
   /* Modal open / mode sync — reset controlled form + permission selection */
@@ -209,29 +226,31 @@ export default function ControllerFormModal({
               <div className="grid gap-4 sm:grid-cols-2">
                 <Form.Item
                   name="roleLabel"
-                  label={<span className="text-[13px] font-medium text-gray-400">Role label</span>}
-                  rules={[{ required: true, message: 'Role label is required' }]}
+                  label={<span className="text-[13px] font-medium text-gray-400">Role name</span>}
+                  rules={[{ required: true, message: 'Role name is required' }]}
                   hasFeedback
                 >
                   <Input
-                    placeholder="e.g. Operations manager"
+                    placeholder="e.g. manager"
                     className="!h-11 !rounded-xl !border-white/[0.08] !bg-surface-elevated/90 !px-3.5 !text-gray-100 placeholder:!text-gray-600"
                   />
                 </Form.Item>
-                <Form.Item
-                  name="status"
-                  label={<span className="text-[13px] font-medium text-gray-400">Status</span>}
-                  rules={[{ required: true }]}
-                >
-                  <Select
-                    placeholder="Select status"
-                    options={statusOptions.map((o) => ({
-                      value: o.value,
-                      label: o.label,
-                    }))}
-                    className="controller-status-select !h-11 [&_.ant-select-selector]:!rounded-xl [&_.ant-select-selector]:!border-white/[0.08] [&_.ant-select-selector]:!bg-surface-elevated/90 [&_.ant-select-selector]:!px-3 [&_.ant-select-selection-item]:!text-gray-100"
-                  />
-                </Form.Item>
+                {mode === 'edit' ? (
+                  <Form.Item
+                    name="status"
+                    label={<span className="text-[13px] font-medium text-gray-400">Status</span>}
+                    rules={[{ required: true }]}
+                  >
+                    <Select
+                      placeholder="Select status"
+                      options={statusOptions.map((o) => ({
+                        value: o.value,
+                        label: o.label,
+                      }))}
+                      className="controller-status-select !h-11 [&_.ant-select-selector]:!rounded-xl [&_.ant-select-selector]:!border-white/[0.08] [&_.ant-select-selector]:!bg-surface-elevated/90 [&_.ant-select-selector]:!px-3 [&_.ant-select-selection-item]:!text-gray-100"
+                    />
+                  </Form.Item>
+                ) : null}
               </div>
             </Form>
           </motion.div>
@@ -270,8 +289,9 @@ export default function ControllerFormModal({
             </button>
             <button
               type="button"
+              disabled={loading}
               onClick={handleSubmit}
-              className="rounded-xl border border-brand/40 bg-brand px-5 py-2.5 text-sm font-semibold text-white shadow-[0_0_28px_-8px_rgba(160,82,45,0.85)] transition hover:bg-brand-hover hover:shadow-[0_0_36px_-8px_rgba(160,82,45,0.95)]"
+              className="rounded-xl border border-brand/40 bg-brand px-5 py-2.5 text-sm font-semibold text-white shadow-[0_0_28px_-8px_rgba(160,82,45,0.85)] transition hover:bg-brand-hover hover:shadow-[0_0_36px_-8px_rgba(160,82,45,0.95)] disabled:cursor-not-allowed disabled:opacity-60"
             >
               {primaryLabel}
             </button>

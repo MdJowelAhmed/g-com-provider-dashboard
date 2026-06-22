@@ -14,5 +14,6 @@ export const DEFAULT_PAGE_SIZE = 8
 export const STATUS_OPTIONS: { value: ControllerStatus; label: string }[] = [
   { value: 'active', label: 'Active' },
   { value: 'inactive', label: 'Inactive' },
+  { value: 'pending', label: 'Pending' },
   { value: 'suspended', label: 'Suspended' },
 ]

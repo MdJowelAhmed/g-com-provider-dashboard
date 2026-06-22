@@ -12,6 +12,8 @@ import {
   Ticket,
   BookOpen,
   Package,
+  Building2,
+  Tags,
   Banknote,
   MessageSquare,
   Megaphone,
@@ -90,6 +92,8 @@ export const ROLE_META: Record<Role, RoleMeta> = {
     ],
     navItems: [
       { path: '', label: 'Overview', icon: LayoutDashboard },
+      { path: 'shop-management', label: 'Shop Management', icon: Building2 },
+      { path: 'business-categories', label: 'Business Category', icon: Tags },
       { path: 'services', label: 'Services', icon: Wrench },
       { path: 'bookings', label: 'Bookings', icon: ClipboardList },
       { path: 'customers', label: 'Customers', icon: Users },
@@ -119,6 +123,8 @@ export const ROLE_META: Record<Role, RoleMeta> = {
     ],
     navItems: [
       { path: '', label: 'Overview', icon: LayoutDashboard },
+      { path: 'shop-management', label: 'Shop Management', icon: Building2 },
+      { path: 'business-categories', label: 'Business Category', icon: Tags },
       { path: 'rooms', label: 'Rooms', icon: BedDouble },
       { path: 'reservations', label: 'Reservations', icon: CalendarDays },
       { path: 'guests', label: 'Guests', icon: Users },
@@ -146,6 +152,8 @@ export const ROLE_META: Record<Role, RoleMeta> = {
     ],
     navItems: [
       { path: '', label: 'Overview', icon: LayoutDashboard },
+      { path: 'shop-management', label: 'Shop Management', icon: Building2 },
+      { path: 'business-categories', label: 'Business Category', icon: Tags },
       { path: 'menu', label: 'Menu', icon: BookOpen },
       { path: 'orders', label: 'Orders', icon: ClipboardList },
       { path: 'messages', label: 'Messages', icon: MessageSquare },
@@ -172,6 +180,8 @@ export const ROLE_META: Record<Role, RoleMeta> = {
     ],
     navItems: [
       { path: '', label: 'Overview', icon: LayoutDashboard },
+      { path: 'shop-management', label: 'Shop Management', icon: Building2 },
+      { path: 'business-categories', label: 'Business Category', icon: Tags },
       { path: 'products', label: 'Products', icon: Package },
       { path: 'orders', label: 'Orders', icon: ShoppingBag },
       { path: 'customers', label: 'Customers', icon: Users },
@@ -199,6 +209,8 @@ export const ROLE_META: Record<Role, RoleMeta> = {
     ],
     navItems: [
       { path: '', label: 'Overview', icon: LayoutDashboard },
+      { path: 'shop-management', label: 'Shop Management', icon: Building2 },
+      { path: 'business-categories', label: 'Business Category', icon: Tags },
       { path: 'events', label: 'Events', icon: CalendarDays },
       { path: 'tickets', label: 'Tickets', icon: Ticket },
       { path: 'attendees', label: 'Attendees', icon: Users },

@@ -1,9 +1,9 @@
 import type { CampaignDisplayStatus, Post, PostMedia } from '../types'
-import { parseMetaFromBody, productLabel, shopLabel } from './postFormMapping'
+import { getItemDisplayLabel, getPanelDisplayLabel } from './hubPostMapping'
 
 export type PostDisplayRow = {
-  shopName: string
-  productName: string
+  panel: string
+  itemLabel: string
   about: string
   amount: string
   startLocal: string
@@ -19,40 +19,44 @@ export function parseLocalDate(value: string): Date | null {
   return Number.isNaN(d.getTime()) ? null : d
 }
 
-/** Compare `now` to [start, end] using parsed datetime-local values. */
 export function getCampaignDisplayStatus(
-  startLocal: string,
-  endLocal: string,
+  startDate: string,
+  endDate: string,
   now: Date = new Date(),
 ): CampaignDisplayStatus | null {
-  const start = parseLocalDate(startLocal)
-  const end = parseLocalDate(endLocal)
+  const start = parseLocalDate(startDate)
+  const end = parseLocalDate(endDate)
   if (!start || !end) return null
+
+  const endOfDay = new Date(end)
+  endOfDay.setHours(23, 59, 59, 999)
+
   if (now < start) return 'upcoming'
-  if (now > end) return 'expired'
+  if (now > endOfDay) return 'expired'
   return 'active'
 }
 
 export function getPostDisplayRow(post: Post): PostDisplayRow {
-  const parsed = parseMetaFromBody(post.body)
-  const shopName = shopLabel(parsed.shopId ?? '')
-  const productName = parsed.productId
-    ? productLabel(parsed.productId)
-    : (post.title ?? '').trim()
-  const about = (parsed.about ?? '').trim()
-  const amount = (parsed.totalAmount ?? '').trim()
-  const startLocal = parsed.startLocal ?? ''
-  const endLocal = parsed.endLocal ?? ''
+  const media: PostMedia[] = post.mediaUrl
+    ? [
+        {
+          id: `${post.id}_media`,
+          kind: 'image',
+          url: post.mediaUrl,
+          name: 'media',
+        },
+      ]
+    : []
 
   return {
-    shopName,
-    productName,
-    about,
-    amount,
-    startLocal,
-    endLocal,
-    campaignStatus: getCampaignDisplayStatus(startLocal, endLocal),
-    media: post.media,
+    panel: getPanelDisplayLabel(post.panel),
+    itemLabel: getItemDisplayLabel(post.itemId),
+    about: post.caption.trim(),
+    amount: Number.isFinite(post.itemPrice) ? post.itemPrice.toFixed(2) : '—',
+    startLocal: post.startDate,
+    endLocal: post.endDate,
+    campaignStatus: getCampaignDisplayStatus(post.startDate, post.endDate),
+    media,
   }
 }
 

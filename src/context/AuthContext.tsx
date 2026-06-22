@@ -7,8 +7,17 @@ import {
   useState,
   type ReactNode,
 } from 'react'
+import { useSelector } from 'react-redux'
 import { AUTH_STORAGE_KEYS } from '../auth/session'
+import {
+  clearStoredUser,
+  mapUserProfileToUser,
+  persistStoredUser,
+  readStoredUser,
+} from '../auth/userProfile'
 import { normalizeUserRole } from '../routing/roleRedirect'
+import { useGetMyProfileQuery } from '../redux/api/authApi'
+import type { RootState } from '../redux/store'
 import type { Role } from '../types/role'
 import type { User } from '../types/user'
 
@@ -18,9 +27,10 @@ type RegisterInput = Omit<User, 'id' | 'stripeConnected'>
 
 type AuthState = {
   user: User | null
+  profileLoading: boolean
   login: (email: string) => User | null
-  /** Sign in and set active tenant role from the login form (persisted to session + user record). */
   loginWithRole: (email: string, role: Role) => User | null
+  setUserFromProfile: (user: User) => void
   register: (input: RegisterInput) => User
   updateUser: (partial: Partial<User>) => void
   connectStripe: () => void
@@ -33,7 +43,10 @@ function normalizeUserRecord(raw: unknown): User | null {
   if (!raw || typeof raw !== 'object') return null
   const u = raw as Partial<User>
   if (!u.email || typeof u.email !== 'string') return null
-  const role = normalizeUserRole(u.role) as Role
+  const role =
+    typeof u.role === 'string'
+      ? u.role
+      : (normalizeUserRole(u.role) as Role)
   return { ...(u as User), role }
 }
 
@@ -54,26 +67,39 @@ function writeUsers(users: User[]) {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(() => {
-    try {
-      const raw = localStorage.getItem(AUTH_STORAGE_KEYS.currentUser)
-      if (!raw) return null
-      return normalizeUserRecord(JSON.parse(raw))
-    } catch {
-      return null
-    }
-  })
+  const [user, setUser] = useState<User | null>(() => readStoredUser())
+  const token =
+    useSelector((state: RootState) => state.auth.token) ??
+    (typeof localStorage !== 'undefined' ? localStorage.getItem('token') : null)
+
+  const { data: profileResponse, isFetching: profileLoading } = useGetMyProfileQuery(
+    undefined,
+    {
+      skip: !token,
+      refetchOnMountOrArgChange: true,
+    },
+  )
 
   useEffect(() => {
-    if (user) localStorage.setItem(AUTH_STORAGE_KEYS.currentUser, JSON.stringify(user))
-    else localStorage.removeItem(AUTH_STORAGE_KEYS.currentUser)
-  }, [user])
+    if (!profileResponse?.success || !profileResponse.data) return
+    const mapped = mapUserProfileToUser(profileResponse.data)
+    persistStoredUser(mapped)
+    setUser(mapped)
+  }, [profileResponse])
+
+  const setUserFromProfile = useCallback((nextUser: User) => {
+    persistStoredUser(nextUser)
+    setUser(nextUser)
+  }, [])
 
   const login = useCallback((email: string) => {
     const found = readUsers().find(
       (u) => u.email.toLowerCase() === email.toLowerCase(),
     )
-    if (found) setUser(found)
+    if (found) {
+      persistStoredUser(found)
+      setUser(found)
+    }
     return found ?? null
   }, [])
 
@@ -86,6 +112,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const updated: User = { ...found, role: nextRole }
     const users = readUsers().map((u) => (u.id === updated.id ? updated : u))
     writeUsers(users)
+    persistStoredUser(updated)
     setUser(updated)
     return updated
   }, [])
@@ -96,6 +123,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       (u) => u.email.toLowerCase() === input.email.toLowerCase(),
     )
     if (existing) {
+      persistStoredUser(existing)
       setUser(existing)
       return existing
     }
@@ -110,6 +138,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     users.push(newUser)
     writeUsers(users)
+    persistStoredUser(newUser)
     setUser(newUser)
     return newUser
   }, [])
@@ -120,9 +149,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const updated: User = {
         ...prev,
         ...partial,
-        role: partial.role != null ? (normalizeUserRole(partial.role) as Role) : prev.role,
+        role:
+          partial.role != null
+            ? typeof partial.role === 'string'
+              ? partial.role
+              : (normalizeUserRole(partial.role) as Role)
+            : prev.role,
         extra: partial.extra ? { ...prev.extra, ...partial.extra } : prev.extra,
       }
+      persistStoredUser(updated)
       const users = readUsers().map((u) => (u.id === updated.id ? updated : u))
       writeUsers(users)
       return updated
@@ -133,25 +168,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser((prev) => {
       if (!prev) return prev
       const updated: User = { ...prev, stripeConnected: true }
+      persistStoredUser(updated)
       const users = readUsers().map((u) => (u.id === updated.id ? updated : u))
       writeUsers(users)
       return updated
     })
   }, [])
 
-  const logout = useCallback(() => setUser(null), [])
+  const logout = useCallback(() => {
+    clearStoredUser()
+    setUser(null)
+  }, [])
 
   const value = useMemo<AuthState>(
     () => ({
       user,
+      profileLoading,
       login,
       loginWithRole,
+      setUserFromProfile,
       register,
       updateUser,
       connectStripe,
       logout,
     }),
-    [user, login, loginWithRole, register, updateUser, connectStripe, logout],
+    [
+      user,
+      profileLoading,
+      login,
+      loginWithRole,
+      setUserFromProfile,
+      register,
+      updateUser,
+      connectStripe,
+      logout,
+    ],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

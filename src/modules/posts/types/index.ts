@@ -1,6 +1,8 @@
 import type { Role } from '../../../types/role'
+import type { HubPostPanel } from '../../../redux/api/hubPostApi'
 
-export type PostStatus = 'draft' | 'scheduled' | 'published' | 'archived'
+/** Derived from campaign start/end — table filter + badge */
+export type CampaignDisplayStatus = 'active' | 'upcoming' | 'expired'
 
 export type PostMedia = {
   id: string
@@ -13,25 +15,25 @@ export type PostMedia = {
 export type Post = {
   id: string
   role: Role
-  title: string
-  excerpt: string
-  body: string
-  postType: string
-  status: PostStatus
-  scheduledAt: string | null
-  publishedAt: string | null
-  media: PostMedia[]
-  featured: boolean
+  itemId: string
+  panel: HubPostPanel
+  caption: string
+  mediaUrl: string
+  itemPrice: number
+  startDate: string
+  endDate: string
+  category?: string
+  likesCount: number
+  commentCount: number
+  shareCount: number
+  isTrending: boolean
   createdAt: string
   updatedAt: string
 }
 
-/** Derived from campaign start/end — table filter + badge */
-export type CampaignDisplayStatus = 'active' | 'upcoming' | 'expired'
-
 export type SortKey =
-  | 'shopName'
-  | 'productName'
+  | 'panel'
+  | 'itemId'
   | 'about'
   | 'amount'
   | 'startAt'
@@ -40,13 +42,12 @@ export type SortKey =
   | 'updatedAt'
 export type SortDir = 'asc' | 'desc'
 
-/** Create/edit post modal — maps to stored `Post` via `postFormMapping` */
 export type PostFormValues = {
-  shopId: string
-  productId: string
-  totalAmount: string
-  startLocal: string
-  endLocal: string
-  about: string
-  media: PostMedia[]
+  itemId: string
+  panel: HubPostPanel
+  caption: string
+  media: string
+  itemPrice: string
+  startDate: string
+  endDate: string
 }
