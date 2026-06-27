@@ -2,14 +2,29 @@ import { baseApi } from './baseApi'
 
 export type ServicePricingType = 'fixed' | 'per_hour' | 'request_a_quote'
 
+export type ServiceMainCategory = 'services' | 'stay' | 'dine' | 'shop' | 'event'
+
+export interface ServiceNamedRef {
+  _id: string
+  name: string
+}
+
+export interface ServiceBranchRef {
+  _id: string
+  branchName: string
+}
+
+export type ServiceRelationRef = string | ServiceNamedRef | ServiceBranchRef | null | undefined
+
 export interface ServiceApiDoc {
   _id: string
   business: string
   name: string
   serviceCode: string
-  subCategory: string
-  businessCategory: string
-  branch: string
+  mainCategory?: ServiceMainCategory | string
+  subCategory?: ServiceRelationRef
+  businessCategory?: ServiceRelationRef
+  branch?: ServiceRelationRef
   description: string
   pricingType: ServicePricingType
   price: number

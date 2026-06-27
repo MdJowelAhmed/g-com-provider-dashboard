@@ -47,9 +47,13 @@ export type Service = {
   id: string
   name: string
   serviceCode: string
+  platformCategory: PlatformCategory | ''
   subCategoryId: string
+  subCategoryName?: string
   businessCategoryId: string
+  businessCategoryName?: string
   branchId: string
+  branchName?: string
   description: string
   pricingType: PricingType
   price: number

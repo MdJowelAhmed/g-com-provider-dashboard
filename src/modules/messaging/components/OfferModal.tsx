@@ -1,74 +1,110 @@
 import { Modal } from 'antd'
-import { useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useGetServicesQuery } from '../../../redux/api/serviceApi'
+import { mapServiceFromApi } from '../../../pages/dashboard/services/serviceMapping'
 import type { Role } from '../../../types/role'
-import type { DeliveryMethod } from '../types'
 import type { RoleMessagingConfig } from '../types'
-import { getCatalogForRole } from '../mock/roleCatalogs'
 import type { CreateOfferInput } from '../hooks/useMessaging'
+import { itemTypeForRole, toIsoStartTime } from '../utils/offerHelpers'
 
 type Props = {
   open: boolean
   role: Role
   config: RoleMessagingConfig
+  submitting?: boolean
   onClose: () => void
-  onSubmit: (input: CreateOfferInput) => void
+  onSubmit: (input: CreateOfferInput) => Promise<void>
 }
 
-export default function OfferModal({ open, role, config, onClose, onSubmit }: Props) {
-  const catalog = useMemo(() => getCatalogForRole(role), [role])
-  const [selectedKey, setSelectedKey] = useState<string>(catalog[0]?.id ?? '')
-  const [qty, setQty] = useState(1)
-  const [deliveryMethod, setDeliveryMethod] = useState<DeliveryMethod>(
-    config.deliveryMethods[0]?.value ?? 'delivery',
+const inputClass =
+  'messaging-input mt-1 w-full rounded-lg border border-surface-border bg-surface-elevated px-3 py-2 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/25'
+
+export default function OfferModal({
+  open,
+  role,
+  config,
+  submitting,
+  onClose,
+  onSubmit,
+}: Props) {
+  const { data: servicesData, isLoading: servicesLoading } = useGetServicesQuery({
+    page: 1,
+    limit: 100,
+  })
+
+  const services = useMemo(
+    () => (servicesData?.data ?? []).map((doc) => mapServiceFromApi(doc)),
+    [servicesData?.data],
   )
-  const [fees, setFees] = useState(0)
 
-  const item = catalog.find((c) => c.id === selectedKey)
-  const currency = item?.currency ?? 'USD'
+  const [selectedId, setSelectedId] = useState('')
+  const [title, setTitle] = useState('')
+  const [description, setDescription] = useState('')
+  const [notes, setNotes] = useState('')
+  const [price, setPrice] = useState(0)
+  const [qty, setQty] = useState(1)
+  const [deliveryFee, setDeliveryFee] = useState(0)
+  const [startTime, setStartTime] = useState('')
 
-  const lineItems = useMemo(() => {
-    if (!item) return []
-    return [
-      {
-        id: `${item.id}-line`,
-        label: item.label,
-        unitPrice: item.unitPrice,
-        quantity: qty,
-      },
-    ]
-  }, [item, qty])
+  const selectedService = services.find((s) => s.id === selectedId)
+  const itemType = itemTypeForRole(role)
+  const showStartTime = role === 'services' || role === 'events' || role === 'stay'
 
-  const subtotal = item ? item.unitPrice * qty : 0
-  const total = subtotal + fees
+  useEffect(() => {
+    if (!open || services.length === 0) return
+    const first = services[0]
+    setSelectedId(first.id)
+    setTitle(first.name)
+    setDescription(first.description)
+    setNotes('')
+    setPrice(first.price)
+    setQty(1)
+    setDeliveryFee(0)
+    setStartTime('')
+  }, [open, services])
 
-  const handleOk = () => {
-    if (!item || lineItems.length === 0) return
-    onSubmit({
-      title: `${item.label} × ${qty}`,
-      lineItems,
-      deliveryMethod,
-      currency,
-      fees,
+  const handleServiceChange = (serviceId: string) => {
+    setSelectedId(serviceId)
+    const service = services.find((s) => s.id === serviceId)
+    if (!service) return
+    setTitle(service.name)
+    setDescription(service.description)
+    setPrice(service.price)
+  }
+
+  const subtotal = price * qty
+  const total = subtotal + deliveryFee
+
+  const handleOk = async () => {
+    if (!selectedId || !title.trim()) return
+    const isoStart = toIsoStartTime(startTime)
+    await onSubmit({
+      itemId: selectedId,
+      title: title.trim(),
+      description: description.trim(),
+      notes: notes.trim(),
+      price: Number(price),
+      quantity: qty,
+      deliveryFee: Number(deliveryFee),
+      itemType,
+      ...(isoStart ? { startTime: isoStart } : {}),
     })
   }
 
   return (
     <Modal
-      title={<span className="text-base font-semibold text-gray-100">{config.labels.offerModalTitle}</span>}
+      title={
+        <span className="text-base font-semibold text-gray-100">
+          {config.labels.offerModalTitle}
+        </span>
+      }
       open={open}
-      afterOpenChange={(visible) => {
-        if (visible && catalog[0]) {
-          setSelectedKey(catalog[0].id)
-          setQty(1)
-          setDeliveryMethod(config.deliveryMethods[0]?.value ?? 'delivery')
-          setFees(0)
-        }
-      }}
       onCancel={onClose}
       onOk={handleOk}
       okText="Send offer"
       cancelText="Cancel"
-      width={520}
+      confirmLoading={submitting}
+      width={560}
       centered
       rootClassName="gcom-offer-modal dark-modal-surface"
       classNames={{
@@ -78,84 +114,127 @@ export default function OfferModal({ open, role, config, onClose, onSubmit }: Pr
       }}
       okButtonProps={{
         className: '!bg-brand hover:!bg-brand-hover !text-white !border-none',
+        disabled: !selectedId || !title.trim() || servicesLoading,
+        loading: submitting,
       }}
     >
       <div className="space-y-4 text-sm text-gray-200">
-        <Field label="Product / service">
-          <select
-            value={selectedKey}
-            onChange={(e) => setSelectedKey(e.target.value)}
-            className="messaging-input mt-1 w-full rounded-lg border border-surface-border bg-surface-elevated px-3 py-2 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/25"
-          >
-            {catalog.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.label}
-                {c.subtitle ? ` — ${c.subtitle}` : ''} ({c.currency} {c.unitPrice})
-              </option>
-            ))}
-          </select>
+        <Field label="Service / item">
+          {servicesLoading ? (
+            <p className="mt-1 text-xs text-gray-500">Loading items…</p>
+          ) : services.length === 0 ? (
+            <p className="mt-1 text-xs text-accent-amber">
+              No services found. Add a service first to send an offer.
+            </p>
+          ) : (
+            <select
+              value={selectedId}
+              onChange={(e) => handleServiceChange(e.target.value)}
+              className={inputClass}
+            >
+              {services.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name} — ${s.price.toFixed(2)}
+                  {s.serviceCode ? ` (${s.serviceCode})` : ''}
+                </option>
+              ))}
+            </select>
+          )}
+        </Field>
+
+        <Field label="Title">
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            className={inputClass}
+            placeholder="Offer title"
+          />
+        </Field>
+
+        <Field label="Description">
+          <textarea
+            rows={3}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            className={`${inputClass} resize-y`}
+            placeholder="Describe what is included in this offer"
+          />
+        </Field>
+
+        <Field label="Notes">
+          <input
+            type="text"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            className={inputClass}
+            placeholder="Optional note for the customer"
+          />
         </Field>
 
         <div className="grid grid-cols-2 gap-3">
+          <Field label="Price">
+            <input
+              type="number"
+              min={0}
+              step={0.01}
+              value={price}
+              onChange={(e) => setPrice(Math.max(0, Number(e.target.value) || 0))}
+              className={`${inputClass} font-mono`}
+            />
+          </Field>
           <Field label="Quantity">
             <input
               type="number"
               min={1}
               value={qty}
               onChange={(e) => setQty(Math.max(1, Number(e.target.value) || 1))}
-              className="messaging-input mt-1 w-full rounded-lg border border-surface-border bg-surface-elevated px-3 py-2 font-mono text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/25"
-            />
-          </Field>
-          <Field label="Fees / adjustments">
-            <input
-              type="number"
-              min={0}
-              step={0.01}
-              value={fees}
-              onChange={(e) => setFees(Math.max(0, Number(e.target.value) || 0))}
-              className="messaging-input mt-1 w-full rounded-lg border border-surface-border bg-surface-elevated px-3 py-2 font-mono text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/25"
+              className={`${inputClass} font-mono`}
             />
           </Field>
         </div>
 
-        <Field label="Delivery method">
-          <div className="mt-2 flex flex-wrap gap-2">
-            {config.deliveryMethods.map((d) => (
-              <button
-                key={d.value}
-                type="button"
-                onClick={() => setDeliveryMethod(d.value)}
-                className={`rounded-lg border px-3 py-2 text-xs font-medium transition ${
-                  deliveryMethod === d.value
-                    ? 'border-brand bg-brand/15 text-white ring-1 ring-brand/40'
-                    : 'border-surface-border text-gray-400 hover:border-brand/40 hover:text-gray-100'
-                }`}
-              >
-                {d.label}
-              </button>
-            ))}
-          </div>
+        <Field label="Delivery fee">
+          <input
+            type="number"
+            min={0}
+            step={0.01}
+            value={deliveryFee}
+            onChange={(e) => setDeliveryFee(Math.max(0, Number(e.target.value) || 0))}
+            className={`${inputClass} font-mono`}
+          />
         </Field>
+
+        {showStartTime ? (
+          <Field label="Start time (optional)">
+            <input
+              type="datetime-local"
+              value={startTime}
+              onChange={(e) => setStartTime(e.target.value)}
+              className={inputClass}
+            />
+          </Field>
+        ) : null}
 
         <div className="rounded-xl border border-surface-border bg-surface-elevated p-4">
           <div className="flex justify-between text-xs text-gray-500">
             <span>Subtotal</span>
-            <span className="font-mono text-gray-300">
-              {currency} {subtotal.toFixed(2)}
-            </span>
+            <span className="font-mono text-gray-300">USD {subtotal.toFixed(2)}</span>
           </div>
           <div className="mt-2 flex justify-between text-xs text-gray-500">
-            <span>Fees</span>
-            <span className="font-mono text-gray-300">
-              {currency} {fees.toFixed(2)}
-            </span>
+            <span>Delivery fee</span>
+            <span className="font-mono text-gray-300">USD {deliveryFee.toFixed(2)}</span>
           </div>
           <div className="mt-3 flex justify-between border-t border-surface-border pt-3 text-sm font-semibold text-white">
             <span>Customer pays</span>
-            <span className="font-mono">
-              {currency} {total.toFixed(2)}
-            </span>
+            <span className="font-mono">USD {total.toFixed(2)}</span>
           </div>
+          {selectedService ? (
+            <p className="mt-2 text-[11px] text-gray-500">
+              Item type · {itemType}
+              {selectedService.duration ? ` · ${selectedService.duration}` : ''}
+            </p>
+          ) : null}
         </div>
       </div>
     </Modal>

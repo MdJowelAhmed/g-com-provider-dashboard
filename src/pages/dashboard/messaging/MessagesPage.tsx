@@ -18,7 +18,7 @@ export default function MessagesPage() {
         description={`${user.businessName || user.ownerName} · ${ROLE_HINT[dashboardRole]}`}
       />
       <div className="mt-2 h-[min(780px,calc(100vh-10rem))] min-h-[480px] overflow-hidden">
-        <MessagingShell role={dashboardRole} businessLabel={user.businessName || user.ownerName} />
+        <MessagingShell role={dashboardRole} />
       </div>
     </div>
   )

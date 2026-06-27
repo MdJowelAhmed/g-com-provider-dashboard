@@ -20,6 +20,7 @@ type Props = {
   onView: (post: Post) => void
   onEdit: (post: Post) => void
   onDelete: (post: Post) => void
+  serviceLabelById?: Map<string, string>
 }
 
 function fmtDate(value: string) {
@@ -83,6 +84,7 @@ export default function PostTable({
   onView,
   onEdit,
   onDelete,
+  serviceLabelById,
 }: Props) {
   const colCount = 10
 
@@ -114,7 +116,7 @@ export default function PostTable({
                 onClick={() => onSort('panel')}
               />
               <SortTh
-                label="Item"
+                label="Service"
                 active={sortKey === 'itemId'}
                 dir={sortDir}
                 onClick={() => onSort('itemId')}
@@ -172,7 +174,8 @@ export default function PostTable({
                 const row = getPostDisplayRow(post)
                 const thumb = row.media[0]
                 const selected = selectedIds.includes(post.id)
-                const labelForA11y = row.about || row.itemLabel || 'post'
+                const serviceLabel = serviceLabelById?.get(post.itemId) ?? row.itemLabel
+                const labelForA11y = row.about || serviceLabel || 'post'
                 return (
                   <motion.tr
                     layout
@@ -199,8 +202,8 @@ export default function PostTable({
                       </div>
                     </td>
                     <td className="max-w-[160px] px-3 py-3.5 align-middle">
-                      <div className="truncate text-gray-200" title={post.itemId || undefined}>
-                        {row.itemLabel || '—'}
+                      <div className="truncate text-gray-200" title={serviceLabel || undefined}>
+                        {serviceLabel || '—'}
                       </div>
                     </td>
                     <td className="max-w-[220px] px-3 py-3.5 align-middle">

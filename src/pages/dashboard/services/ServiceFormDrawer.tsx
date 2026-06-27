@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Drawer,
   Form,
@@ -10,12 +10,17 @@ import {
   Divider,
   Button,
   Space,
+  message,
 } from 'antd'
 import ImageUploader from '../../../components/common/ImageUploader'
 import { useDashboardRole } from '../../../auth/useDashboardRole'
 import { useGetBusinessCategoriesQuery } from '../../../redux/api/businessCategoryApi'
 import { useGetShopsQuery } from '../../../redux/api/shopManagementApi'
 import { useGetSubCategoriesQuery } from '../../../redux/api/serviceApi'
+import {
+  uploadImageFile,
+  useGetPresignedUploadUrlMutation,
+} from '../../../redux/api/imageUploadApi'
 import {
   PLATFORM_CATEGORY_OPTIONS,
   PRICING_TYPE_OPTIONS,
@@ -77,6 +82,9 @@ export default function ServiceFormDrawer({
   const [form] = Form.useForm<ServiceFormValues>()
   const { user } = useAuth()
   const dashboardRole = useDashboardRole()
+  const [pendingImageFile, setPendingImageFile] = useState<File | null>(null)
+  const [isUploadingImage, setIsUploadingImage] = useState(false)
+  const [getPresignedUrl] = useGetPresignedUploadUrlMutation()
 
   const platformCategory = Form.useWatch('platformCategory', form) as PlatformCategory | '' | undefined
 
@@ -111,16 +119,36 @@ export default function ServiceFormDrawer({
     [categoriesData?.data],
   )
 
-  const subCategoryOptions = useMemo(
-    () =>
-      (subCategoriesData?.data ?? [])
-        .filter((item) => item.status === 'active')
-        .map((item) => ({
-          value: item._id,
-          label: item.name,
-        })),
-    [subCategoriesData?.data],
-  )
+  const subCategoryOptions = useMemo(() => {
+    const fromApi = (subCategoriesData?.data ?? [])
+      .filter((item) => item.status === 'active')
+      .map((item) => ({
+        value: item._id,
+        label: item.name,
+      }))
+
+    if (mode === 'edit' && initial?.subCategoryId) {
+      const exists = fromApi.some((option) => option.value === initial.subCategoryId)
+      if (!exists) {
+        return [
+          {
+            value: initial.subCategoryId,
+            label: initial.subCategoryName ?? initial.subCategoryId,
+          },
+          ...fromApi,
+        ]
+      }
+    }
+
+    return fromApi
+  }, [subCategoriesData?.data, mode, initial?.subCategoryId, initial?.subCategoryName])
+
+  useEffect(() => {
+    if (!open) {
+      setPendingImageFile(null)
+      setIsUploadingImage(false)
+    }
+  }, [open])
 
   useEffect(() => {
     if (!open) return
@@ -130,9 +158,13 @@ export default function ServiceFormDrawer({
     const fallbackPlatform = defaultPlatformCategory(dashboardRole, businessCategory)
 
     if (mode === 'edit' && initial) {
+      setPendingImageFile(null)
       form.setFieldsValue({
         ...serviceToFormValues(initial),
-        platformCategory: initialPlatformCategory ?? fallbackPlatform,
+        platformCategory:
+          initial.platformCategory ||
+          initialPlatformCategory ||
+          fallbackPlatform,
       })
       return
     }
@@ -142,6 +174,7 @@ export default function ServiceFormDrawer({
       branch: branchOptions[0]?.value ?? '',
       businessCategory: businessCategoryOptions[0]?.value ?? '',
     })
+    setPendingImageFile(null)
   }, [
     open,
     mode,
@@ -155,11 +188,11 @@ export default function ServiceFormDrawer({
   ])
 
   useEffect(() => {
-    if (!open || !platformCategory) return
+    if (!open || !platformCategory || subCategoriesLoading) return
     const currentSub = form.getFieldValue('subCategory') as string
-    if (!currentSub) return
+    if (!currentSub || subCategoryOptions.length === 0) return
     const stillValid = subCategoryOptions.some((option) => option.value === currentSub)
-    if (!stillValid && !subCategoriesLoading) {
+    if (!stillValid) {
       form.setFieldValue('subCategory', '')
     }
   }, [open, platformCategory, subCategoryOptions, subCategoriesLoading, form])
@@ -170,13 +203,42 @@ export default function ServiceFormDrawer({
 
   const handleOk = async () => {
     const values = await form.validateFields()
+
+    let imageUrl = values.image?.trim() ?? ''
+
+    if (pendingImageFile) {
+      setIsUploadingImage(true)
+      try {
+        imageUrl = await uploadImageFile(pendingImageFile, async (payload) => {
+          const result = await getPresignedUrl(payload).unwrap()
+          return result
+        })
+        setPendingImageFile(null)
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : 'Image upload failed.'
+        message.error(errorMessage)
+        return
+      } finally {
+        setIsUploadingImage(false)
+      }
+    }
+
+    if (!imageUrl) {
+      message.error('Please select a cover image.')
+      return
+    }
+
     await onSubmit({
       ...values,
+      image: imageUrl,
       price: Number(values.price),
       maxBookingPerDay: Number(values.maxBookingPerDay),
       duration: String(values.duration).trim(),
     })
   }
+
+  const isBusy = submitting || isUploadingImage
 
   return (
     <Drawer
@@ -188,11 +250,15 @@ export default function ServiceFormDrawer({
       destroyOnHidden
       footer={
         <Space style={{ display: 'flex', justifyContent: 'flex-end', width: '100%' }}>
-          <Button onClick={onCancel} disabled={submitting}>
+          <Button onClick={onCancel} disabled={isBusy}>
             Cancel
           </Button>
-          <Button type="primary" onClick={handleOk} loading={submitting}>
-            {mode === 'edit' ? 'Save changes' : 'Add service'}
+          <Button type="primary" onClick={handleOk} loading={isBusy}>
+            {isUploadingImage
+              ? 'Uploading image…'
+              : mode === 'edit'
+                ? 'Save changes'
+                : 'Add service'}
           </Button>
         </Space>
       }
@@ -229,9 +295,21 @@ export default function ServiceFormDrawer({
             <Form.Item
               name="image"
               label="Cover image"
-              rules={[{ required: true, message: 'Image is required' }]}
+              rules={[
+                {
+                  validator: async () => {
+                    const current = form.getFieldValue('image') as string | undefined
+                    if (current?.trim() || pendingImageFile) return
+                    throw new Error('Image is required')
+                  },
+                },
+              ]}
             >
-              <ImageUploader autoUpload hint="Upload a service cover image" />
+              <ImageUploader
+                autoUpload={false}
+                hint="Image uploads when you save the service"
+                onFileSelect={setPendingImageFile}
+              />
             </Form.Item>
           </Col>
           <Col span={12}>

@@ -15,6 +15,7 @@ type Props = {
   hasMore: boolean
   loadingMore: boolean
   onLoadMore: () => void
+  refreshing?: boolean
 }
 
 function presenceDot(status: Conversation['counterpartStatus']) {
@@ -35,12 +36,16 @@ export default function ConversationListPanel({
   hasMore,
   loadingMore,
   onLoadMore,
+  refreshing,
 }: Props) {
   return (
     <div className="flex h-full min-h-0 w-full max-w-[320px] shrink-0 flex-col border-r border-surface-border bg-surface-sidebar">
       <div className="shrink-0 border-b border-surface-border px-4 py-4">
         <div className="flex items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold text-white">{title}</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-semibold text-white">{title}</h2>
+            {refreshing ? <Loader2 size={14} className="animate-spin text-gray-500" /> : null}
+          </div>
           {unreadTotal > 0 ? (
             <span className="rounded-full bg-brand px-2 py-0.5 text-[11px] font-semibold text-white">
               {unreadTotal > 99 ? '99+' : unreadTotal}
@@ -80,9 +85,17 @@ export default function ConversationListPanel({
               >
                 <div className="flex items-start gap-2">
                   <div className="relative shrink-0">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-surface-card text-xs font-semibold text-gray-200">
-                      {c.counterpartName.slice(0, 2).toUpperCase()}
-                    </div>
+                    {c.avatarUrl ? (
+                      <img
+                        src={c.avatarUrl}
+                        alt={c.counterpartName}
+                        className="h-10 w-10 rounded-full border border-surface-border bg-surface-card object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-surface-card text-xs font-semibold text-gray-200">
+                        {c.counterpartName.slice(0, 2).toUpperCase()}
+                      </div>
+                    )}
                     <span
                       className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full ${presenceDot(c.counterpartStatus)}`}
                       title={c.counterpartStatus}

@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { Package, Truck } from 'lucide-react'
+import { Calendar, Package } from 'lucide-react'
 import type { Offer } from '../types'
 
 type Props = {
@@ -17,6 +17,11 @@ const statusStyle: Record<
   declined: { label: 'Declined', className: 'bg-accent-danger/15 text-accent-danger' },
   withdrawn: { label: 'Withdrawn', className: 'bg-gray-600/30 text-gray-400' },
   expired: { label: 'Expired', className: 'bg-gray-600/30 text-gray-400' },
+}
+
+function formatItemType(value?: string) {
+  if (!value) return 'Custom offer'
+  return value.charAt(0).toUpperCase() + value.slice(1)
 }
 
 /** Compact offer card — layout preserved for all roles */
@@ -40,13 +45,18 @@ export default function OfferCard({ offer, onWithdraw }: Props) {
           <div className="min-w-0">
             <div className="truncate text-sm font-semibold text-gray-100">{offer.title}</div>
             <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-gray-500">
-              <span className="inline-flex items-center gap-1">
-                <Truck size={11} />
-                {offer.deliveryMethod.replace(/_/g, ' ')}
-              </span>
-              <span>
-                Updated {new Date(offer.updatedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-              </span>
+              <span>{formatItemType(offer.itemType)}</span>
+              {offer.startDate ? (
+                <span className="inline-flex items-center gap-1">
+                  <Calendar size={11} />
+                  {new Date(offer.startDate).toLocaleString(undefined, {
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </span>
+              ) : null}
             </div>
           </div>
         </div>
@@ -55,7 +65,13 @@ export default function OfferCard({ offer, onWithdraw }: Props) {
         </span>
       </div>
 
-      <ul className="mt-3 space-y-1.5 border-t border-surface-border pt-3">
+      {offer.description ? (
+        <p className="mt-3 border-t border-surface-border pt-3 text-xs leading-relaxed text-gray-400">
+          {offer.description}
+        </p>
+      ) : null}
+
+      <ul className={`space-y-1.5 ${offer.description ? 'mt-3' : 'mt-3 border-t border-surface-border pt-3'}`}>
         {offer.lineItems.map((line) => (
           <li key={line.id} className="flex justify-between gap-3 text-xs text-gray-300">
             <span className="min-w-0 truncate">
@@ -70,6 +86,19 @@ export default function OfferCard({ offer, onWithdraw }: Props) {
           </li>
         ))}
       </ul>
+
+      {offer.fees > 0 ? (
+        <div className="mt-2 flex justify-between text-xs text-gray-500">
+          <span>Delivery fee</span>
+          <span className="font-mono text-gray-300">
+            {offer.currency} {offer.fees.toFixed(2)}
+          </span>
+        </div>
+      ) : null}
+
+      {offer.notes ? (
+        <p className="mt-2 text-[11px] italic text-gray-500">Note: {offer.notes}</p>
+      ) : null}
 
       <div className="mt-3 flex items-center justify-between border-t border-surface-border pt-3 text-sm">
         <span className="text-gray-500">Total</span>

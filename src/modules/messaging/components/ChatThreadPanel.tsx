@@ -1,6 +1,6 @@
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { motion } from 'framer-motion'
-import { AlertCircle } from 'lucide-react'
+import { AlertCircle, Loader2 } from 'lucide-react'
 import { useEffect, useMemo, useRef } from 'react'
 import type { ChatMessage, Conversation, Offer } from '../types'
 import { buildThreadRows } from '../utils/groupMessages'
@@ -20,6 +20,8 @@ type Props = {
   onAttach: () => void
   onOpenOffer: () => void
   onWithdrawOffer: (id: string) => void
+  loading?: boolean
+  sending?: boolean
   labels: {
     emptyTitle: string
     emptyHint: string
@@ -40,6 +42,8 @@ export default function ChatThreadPanel({
   onAttach,
   onOpenOffer,
   onWithdrawOffer,
+  loading,
+  sending,
   labels,
 }: Props) {
   const rows = useMemo(() => buildThreadRows(messages), [messages])
@@ -136,6 +140,11 @@ export default function ChatThreadPanel({
           <div className="text-sm font-medium text-gray-300">{labels.emptyTitle}</div>
           <p className="max-w-sm text-xs text-gray-500">{labels.emptyHint}</p>
         </div>
+      ) : loading ? (
+        <div className="flex flex-1 items-center justify-center gap-2 text-sm text-gray-500">
+          <Loader2 size={18} className="animate-spin" />
+          Loading messages…
+        </div>
       ) : virtualize ? (
         <div ref={scrollRef} className="messaging-scrollbar min-h-0 flex-1 overflow-y-auto">
           <div
@@ -181,7 +190,7 @@ export default function ChatThreadPanel({
       ) : null}
 
       <ChatInputBar
-        disabled={!conversation}
+        disabled={!conversation || loading || sending}
         quickReplies={quickReplies}
         onSend={onSend}
         onAttach={onAttach}

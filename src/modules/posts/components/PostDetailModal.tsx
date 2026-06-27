@@ -7,6 +7,7 @@ import CampaignStatusBadge from './CampaignStatusBadge'
 type Props = {
   open: boolean
   post: Post | null
+  serviceLabelById?: Map<string, string>
   onClose: () => void
 }
 
@@ -27,7 +28,7 @@ function fmtDate(value: string) {
   })
 }
 
-export default function PostDetailModal({ open, post, onClose }: Props) {
+export default function PostDetailModal({ open, post, serviceLabelById, onClose }: Props) {
   if (!post) {
     return null
   }
@@ -58,8 +59,10 @@ export default function PostDetailModal({ open, post, onClose }: Props) {
             <div className="mt-1 text-gray-100">{row.panel || '—'}</div>
           </div>
           <div className="rounded-lg border border-surface-border bg-surface-elevated/60 p-3">
-            <div className="text-[11px] font-medium uppercase tracking-wide text-gray-500">Item ID</div>
-            <div className="mt-1 break-all font-mono text-xs text-gray-100">{post.itemId || '—'}</div>
+            <div className="text-[11px] font-medium uppercase tracking-wide text-gray-500">Service</div>
+            <div className="mt-1 text-gray-100">
+              {serviceLabelById?.get(post.itemId) ?? post.itemId ?? '—'}
+            </div>
           </div>
           <div className="rounded-lg border border-surface-border bg-surface-elevated/60 p-3">
             <div className="text-[11px] font-medium uppercase tracking-wide text-gray-500">Price</div>

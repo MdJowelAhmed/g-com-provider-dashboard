@@ -40,6 +40,8 @@ export type Conversation = {
   /** Display label for counterpart */
   counterpartName: string
   counterpartId: string
+  /** Customer id when chat has a customer participant */
+  customerId?: string
   lastMessagePreview: string
   lastMessageAt: string
   unreadCount: number
@@ -83,6 +85,10 @@ export type Offer = {
   updatedAt: string
   /** Who created (dashboard side = provider) */
   createdBy: 'local' | 'remote'
+  description?: string
+  notes?: string
+  itemType?: string
+  startDate?: string
 }
 
 export type RoleMessagingLabels = {

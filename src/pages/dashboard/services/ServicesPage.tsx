@@ -257,10 +257,12 @@ export default function ServicesPage() {
                       </div>
                     </td>
                     <td className="px-4 py-3 text-gray-300">
-                      {businessCategoryNameById.get(s.businessCategoryId) ?? '—'}
+                      {s.businessCategoryName ??
+                        businessCategoryNameById.get(s.businessCategoryId) ??
+                        '—'}
                     </td>
                     <td className="px-4 py-3 text-gray-300">
-                      {subCategoryNameById.get(s.subCategoryId) ?? '—'}
+                      {s.subCategoryName ?? subCategoryNameById.get(s.subCategoryId) ?? '—'}
                     </td>
                     <td className="px-4 py-3 text-right">
                       <span className="font-medium text-gray-100">{formatPrice(s.price)}</span>
@@ -271,12 +273,15 @@ export default function ServicesPage() {
                     <td className="px-4 py-3 text-gray-300">
                       <span className="inline-flex items-center gap-1">
                         <Clock size={13} className="text-gray-500" />
-                        {s.duration ? `${s.duration}h` : '—'}
+                        {s.duration || '—'}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-gray-300">
-                      <span className="block max-w-[180px] truncate" title={branchNameById.get(s.branchId)}>
-                        {branchNameById.get(s.branchId) ?? '—'}
+                      <span
+                        className="block max-w-[180px] truncate"
+                        title={s.branchName ?? branchNameById.get(s.branchId)}
+                      >
+                        {s.branchName ?? branchNameById.get(s.branchId) ?? '—'}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-gray-300">{s.maxBookingPerDay ?? '—'}</td>
@@ -304,7 +309,9 @@ export default function ServicesPage() {
         initial={modal.mode === 'edit' ? modal.service : null}
         initialPlatformCategory={
           modal.mode === 'edit'
-            ? subCategoryPlatformById.get(modal.service.subCategoryId) ?? null
+            ? modal.service.platformCategory ||
+              subCategoryPlatformById.get(modal.service.subCategoryId) ||
+              null
             : null
         }
         submitting={isCreating || isUpdating}

@@ -1,110 +1,108 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import type { FetchBaseQueryError } from '@reduxjs/toolkit/query'
 import type { Role } from '../../../types/role'
-import type {
-  ChatMessage,
-  Conversation,
-  DeliveryMethod,
-  MessageDeliveryState,
-  Offer,
-  OfferLineItem,
-} from '../types'
+import {
+  useCustomOfferCreateMutation,
+  useGetChatMessagesQuery,
+  useGetChatsQuery,
+  useSendMessageMutation,
+} from '../../../redux/api/chatApi'
 import { getRoleMessagingConfig } from '../config/roleMessagingConfig'
-import { seedMockMessagingState } from '../mock/seedMockState'
-import { createNoopTransport } from '../transport/createNoopTransport'
-import type { MessagingTransport } from '../transport/MessagingTransport'
+import type { Offer } from '../types'
+import { itemTypeForRole } from '../utils/offerHelpers'
+import { mapChatFromApi, mapThreadFromApi } from '../utils/chatMapping'
 
 export type CreateOfferInput = {
+  itemId: string
   title: string
-  lineItems: OfferLineItem[]
-  deliveryMethod: DeliveryMethod
-  currency: string
-  fees: number
+  description: string
+  notes: string
+  price: number
+  quantity: number
+  deliveryFee: number
+  itemType: string
+  startTime?: string
 }
 
-function nextId(prefix: string) {
-  return `${prefix}-${typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Date.now()}`
-}
+const CHAT_FETCH_LIMIT = 100
+const MESSAGE_FETCH_LIMIT = 100
+const CONV_PAGE_SIZE = 15
 
-function transitionDelivery(
-  setMessagesByConv: React.Dispatch<React.SetStateAction<Record<string, ChatMessage[]>>>,
-  conversationId: string,
-  messageId: string,
-) {
-  const steps: MessageDeliveryState[] = ['sent', 'delivered', 'seen']
-  let step = 0
-  const tick = () => {
-    if (step >= steps.length) return
-    const status = steps[step]
-    step += 1
-    setMessagesByConv((prev) => {
-      const list = prev[conversationId] ?? []
-      return {
-        ...prev,
-        [conversationId]: list.map((m) =>
-          m.id === messageId ? { ...m, delivery: status } : m,
-        ),
+export function getChatApiErrorMessage(error: unknown, fallback: string) {
+  if (error && typeof error === 'object' && 'data' in error) {
+    const data = (error as FetchBaseQueryError).data
+    if (data && typeof data === 'object') {
+      const payload = data as { message?: unknown; errorMessages?: { message?: string }[] }
+      if (typeof payload.message === 'string' && payload.message.trim()) {
+        return payload.message
       }
-    })
-    window.setTimeout(tick, 520)
+      const first = payload.errorMessages?.[0]?.message
+      if (first?.trim()) return first
+    }
   }
-  window.setTimeout(tick, 280)
+  return fallback
 }
 
-export function useMessaging(role: Role, businessLabel: string, transport?: MessagingTransport) {
+export function useMessaging(role: Role, currentUserId: string) {
   const config = useMemo(() => getRoleMessagingConfig(role), [role])
-  const seed = useMemo(() => seedMockMessagingState(role, businessLabel), [role, businessLabel])
 
-  const [conversations, setConversations] = useState<Conversation[]>(seed.conversations)
-  const [messagesByConv, setMessagesByConv] = useState(seed.messages)
-  const [offersByConv, setOffersByConv] = useState(seed.offers)
-  const [selectedId, setSelectedId] = useState<string | null>(seed.conversations[0]?.id ?? null)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [convPage, setConvPage] = useState(1)
-  const [loadingOlderConv, setLoadingOlderConv] = useState(false)
   const [offerModalOpen, setOfferModalOpen] = useState(false)
   const [errorBanner, setErrorBanner] = useState<string | null>(null)
+  const [withdrawnOfferIds, setWithdrawnOfferIds] = useState<string[]>([])
 
-  const tpRef = useRef(transport ?? createNoopTransport())
+  const {
+    data: chatsData,
+    isLoading: chatsLoading,
+    isFetching: chatsFetching,
+    isError: chatsError,
+  } = useGetChatsQuery({ page: 1, limit: CHAT_FETCH_LIMIT })
+
+  const conversations = useMemo(
+    () => (chatsData?.data ?? []).map((doc) => mapChatFromApi(doc, role)),
+    [chatsData?.data, role],
+  )
 
   useEffect(() => {
-    const tp = tpRef.current
-    tp.connect({
-      onMessage: (m) => {
-        setMessagesByConv((prev) => ({
-          ...prev,
-          [m.conversationId]: [...(prev[m.conversationId] ?? []), m],
-        }))
-      },
-      onConversationUpdated: (c) => {
-        setConversations((prev) => {
-          const idx = prev.findIndex((x) => x.id === c.id)
-          if (idx === -1) return [...prev, c]
-          const next = [...prev]
-          next[idx] = c
-          return next
-        })
-      },
-      onOfferUpdated: (o) => {
-        setOffersByConv((prev) => {
-          const list = prev[o.conversationId] ?? []
-          const idx = list.findIndex((x) => x.id === o.id)
-          const merged =
-            idx === -1 ? [...list, o] : list.map((x) => (x.id === o.id ? o : x))
-          return { ...prev, [o.conversationId]: merged }
-        })
-      },
-    })
-    return () => tp.disconnect()
-  }, [])
+    if (!selectedId && conversations.length > 0) {
+      setSelectedId(conversations[0].id)
+    }
+  }, [conversations, selectedId])
+
+  const {
+    data: messagesData,
+    isLoading: messagesLoading,
+    isFetching: messagesFetching,
+    isError: messagesError,
+  } = useGetChatMessagesQuery(
+    { id: selectedId!, page: 1, limit: MESSAGE_FETCH_LIMIT },
+    { skip: !selectedId },
+  )
+
+  const [sendMessage, { isLoading: isSending }] = useSendMessageMutation()
+  const [customOfferCreate, { isLoading: isCreatingOffer }] = useCustomOfferCreateMutation()
 
   const selectedConversation = useMemo(
     () => conversations.find((c) => c.id === selectedId) ?? null,
     [conversations, selectedId],
   )
 
-  const messages = selectedId ? messagesByConv[selectedId] ?? [] : []
-
-  const offers = selectedId ? offersByConv[selectedId] ?? [] : []
+  const { messages, offers } = useMemo(() => {
+    if (!selectedId) return { messages: [], offers: [] as Offer[] }
+    const thread = mapThreadFromApi(
+      messagesData?.data ?? [],
+      selectedId,
+      currentUserId,
+    )
+    const mergedOffers = thread.offers.map((offer) =>
+      withdrawnOfferIds.includes(offer.id)
+        ? { ...offer, status: 'withdrawn' as const, updatedAt: new Date().toISOString() }
+        : offer,
+    )
+    return { messages: thread.messages, offers: mergedOffers }
+  }, [messagesData?.data, selectedId, currentUserId, withdrawnOfferIds])
 
   const filteredConversations = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -124,156 +122,85 @@ export function useMessaging(role: Role, businessLabel: string, transport?: Mess
   )
 
   const visibleConversations = useMemo(() => {
-    const pageSize = 15
-    return filteredConversations.slice(0, convPage * pageSize)
+    return filteredConversations.slice(0, convPage * CONV_PAGE_SIZE)
   }, [filteredConversations, convPage])
 
   const hasMoreConversations = visibleConversations.length < filteredConversations.length
 
   const loadMoreConversations = useCallback(() => {
-    setLoadingOlderConv(true)
-    window.setTimeout(() => {
-      setConvPage((p) => p + 1)
-      setLoadingOlderConv(false)
-    }, 450)
+    setConvPage((p) => p + 1)
   }, [])
 
   const selectConversation = useCallback((id: string) => {
     setSelectedId(id)
-    setConversations((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, unreadCount: 0 } : c)),
-    )
   }, [])
 
   const sendText = useCallback(
-    (body: string) => {
+    async (body: string) => {
       if (!selectedId || !body.trim()) return
-      const id = nextId('msg')
-      const msg: ChatMessage = {
-        id,
-        conversationId: selectedId,
-        body: body.trim(),
-        createdAt: new Date().toISOString(),
-        author: 'local',
-        delivery: 'sending',
+      try {
+        await sendMessage({
+          chat: selectedId,
+          type: 'text',
+          text: body.trim(),
+        }).unwrap()
+      } catch (error) {
+        setErrorBanner(getChatApiErrorMessage(error, 'Failed to send message'))
       }
-      setMessagesByConv((prev) => ({
-        ...prev,
-        [selectedId]: [...(prev[selectedId] ?? []), msg],
-      }))
-      setConversations((prev) =>
-        prev.map((c) =>
-          c.id === selectedId
-            ? {
-                ...c,
-                lastMessagePreview: body.trim().slice(0, 120),
-                lastMessageAt: msg.createdAt,
-              }
-            : c,
-        ),
-      )
-      transitionDelivery(setMessagesByConv, selectedId, id)
     },
-    [selectedId],
+    [selectedId, sendMessage],
   )
 
   const attachPlaceholder = useCallback(() => {
-    if (!selectedId) return
-    const id = nextId('msg')
-    const msg: ChatMessage = {
-      id,
-      conversationId: selectedId,
-      body: '',
-      createdAt: new Date().toISOString(),
-      author: 'local',
-      delivery: 'sent',
-      attachments: [
-        {
-          id: nextId('att'),
-          type: 'file',
-          name: 'document.pdf',
-          url: '#',
-          sizeBytes: 245_000,
-        },
-      ],
-    }
-    setMessagesByConv((prev) => ({
-      ...prev,
-      [selectedId]: [...(prev[selectedId] ?? []), msg],
-    }))
-    transitionDelivery(setMessagesByConv, selectedId, id)
-  }, [selectedId])
+    setErrorBanner('File attachments are not available yet.')
+    window.setTimeout(() => setErrorBanner(null), 3500)
+  }, [])
 
   const createOffer = useCallback(
-    (input: CreateOfferInput) => {
-      if (!selectedId) return
-      const id = nextId('offer')
-      const now = new Date().toISOString()
-      const subtotal = input.lineItems.reduce((s, l) => s + l.unitPrice * l.quantity, 0)
-      const total = subtotal + input.fees
-      const offer: Offer = {
-        id,
-        conversationId: selectedId,
-        status: 'pending',
-        title: input.title,
-        lineItems: input.lineItems,
-        deliveryMethod: input.deliveryMethod,
-        currency: input.currency,
-        subtotal,
-        fees: input.fees,
-        total,
-        createdAt: now,
-        updatedAt: now,
-        createdBy: 'local',
+    async (input: CreateOfferInput) => {
+      if (!selectedId || !selectedConversation) return
+      const customerId =
+        selectedConversation.customerId ?? selectedConversation.counterpartId
+      try {
+        await customOfferCreate({
+          chat: selectedId,
+          customer: customerId,
+          itemId: input.itemId,
+          title: input.title,
+          description: input.description,
+          notes: input.notes,
+          price: input.price,
+          quantity: input.quantity,
+          deliveryFee: input.deliveryFee,
+          itemType: input.itemType || itemTypeForRole(role),
+          ...(input.startTime ? { meta: { startTime: input.startTime } } : {}),
+        }).unwrap()
+        setOfferModalOpen(false)
+      } catch (error) {
+        setErrorBanner(getChatApiErrorMessage(error, 'Failed to send offer'))
+        throw error
       }
-      setOffersByConv((prev) => ({
-        ...prev,
-        [selectedId]: [...(prev[selectedId] ?? []), offer],
-      }))
-      const mid = nextId('msg')
-      const msg: ChatMessage = {
-        id: mid,
-        conversationId: selectedId,
-        body: `Offer: ${input.title}`,
-        createdAt: now,
-        author: 'local',
-        delivery: 'sent',
-        offerId: id,
-      }
-      setMessagesByConv((prev) => ({
-        ...prev,
-        [selectedId]: [...(prev[selectedId] ?? []), msg],
-      }))
-      transitionDelivery(setMessagesByConv, selectedId, mid)
-      setOfferModalOpen(false)
     },
-    [selectedId],
+    [selectedId, selectedConversation, customOfferCreate, role],
   )
 
-  const withdrawOffer = useCallback(
-    (offerId: string) => {
-      if (!selectedId) return
-      setOffersByConv((prev) => {
-        const list = prev[selectedId] ?? []
-        return {
-          ...prev,
-          [selectedId]: list.map((o) =>
-            o.id === offerId
-              ? { ...o, status: 'withdrawn' as const, updatedAt: new Date().toISOString() }
-              : o,
-          ),
-        }
-      })
-    },
-    [selectedId],
-  )
-
-  const simulateError = useCallback(() => {
-    setErrorBanner('Could not sync messages. Retry soon.')
-    window.setTimeout(() => setErrorBanner(null), 4000)
+  const withdrawOffer = useCallback((offerId: string) => {
+    setWithdrawnOfferIds((prev) =>
+      prev.includes(offerId) ? prev : [...prev, offerId],
+    )
   }, [])
 
   const dismissError = useCallback(() => setErrorBanner(null), [])
+
+  const listError =
+    chatsError && !chatsLoading
+      ? 'Failed to load conversations. Please refresh and try again.'
+      : null
+
+  const threadError =
+    messagesError && !messagesLoading
+      ? 'Failed to load messages for this conversation.'
+      : null
 
   return {
     config,
@@ -290,14 +217,18 @@ export function useMessaging(role: Role, businessLabel: string, transport?: Mess
     attachPlaceholder,
     loadMoreConversations,
     hasMoreConversations,
-    loadingOlderConv,
+    loadingOlderConv: false,
     offerModalOpen,
     setOfferModalOpen,
     createOffer,
     withdrawOffer,
-    errorBanner,
-    simulateError,
+    errorBanner: errorBanner ?? threadError ?? listError,
     dismissError,
     unreadTotal,
+    initialLoading: chatsLoading,
+    listFetching: chatsFetching,
+    messagesLoading: messagesLoading || messagesFetching,
+    isSending,
+    isCreatingOffer,
   }
 }

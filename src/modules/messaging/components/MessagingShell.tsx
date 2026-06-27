@@ -1,3 +1,5 @@
+import { Loader2 } from 'lucide-react'
+import { useAuth } from '../../../context/AuthContext'
 import type { Role } from '../../../types/role'
 import { useMessaging } from '../hooks/useMessaging'
 import ChatThreadPanel from './ChatThreadPanel'
@@ -6,10 +8,12 @@ import OfferModal from './OfferModal'
 
 type Props = {
   role: Role
-  businessLabel: string
 }
 
-export default function MessagingShell({ role, businessLabel }: Props) {
+export default function MessagingShell({ role }: Props) {
+  const { user } = useAuth()
+  const currentUserId = user?.id ?? ''
+
   const {
     config,
     conversations,
@@ -32,7 +36,23 @@ export default function MessagingShell({ role, businessLabel }: Props) {
     errorBanner,
     dismissError,
     unreadTotal,
-  } = useMessaging(role, businessLabel)
+    initialLoading,
+    listFetching,
+    messagesLoading,
+    isSending,
+    isCreatingOffer,
+  } = useMessaging(role, currentUserId)
+
+  if (initialLoading) {
+    return (
+      <div className="flex h-full min-h-[480px] items-center justify-center rounded-xl border border-surface-border bg-surface-card">
+        <div className="flex items-center gap-2 text-sm text-gray-500">
+          <Loader2 size={18} className="animate-spin" />
+          Loading conversations…
+        </div>
+      </div>
+    )
+  }
 
   return (
     <>
@@ -49,6 +69,7 @@ export default function MessagingShell({ role, businessLabel }: Props) {
           hasMore={hasMoreConversations}
           loadingMore={loadingOlderConv}
           onLoadMore={loadMoreConversations}
+          refreshing={listFetching && !initialLoading}
         />
         <ChatThreadPanel
           conversation={selectedConversation}
@@ -62,6 +83,8 @@ export default function MessagingShell({ role, businessLabel }: Props) {
           onAttach={attachPlaceholder}
           onOpenOffer={() => setOfferModalOpen(true)}
           onWithdrawOffer={withdrawOffer}
+          loading={messagesLoading}
+          sending={isSending}
           labels={{
             emptyTitle: config.labels.emptyThreadTitle,
             emptyHint: config.labels.emptyThreadHint,
@@ -73,6 +96,7 @@ export default function MessagingShell({ role, businessLabel }: Props) {
         open={offerModalOpen}
         role={role}
         config={config}
+        submitting={isCreatingOffer}
         onClose={() => setOfferModalOpen(false)}
         onSubmit={createOffer}
       />

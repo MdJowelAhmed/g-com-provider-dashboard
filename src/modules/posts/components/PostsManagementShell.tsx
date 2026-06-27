@@ -1,6 +1,8 @@
 import { AnimatePresence } from 'framer-motion'
 import { Modal, message } from 'antd'
 import { useCallback, useLayoutEffect, useMemo, useState } from 'react'
+import { useGetServicesQuery } from '../../../redux/api/serviceApi'
+import { mapServiceFromApi } from '../../../pages/dashboard/services/serviceMapping'
 import type { Role } from '../../../types/role'
 import { getRolePostConfig } from '../config/rolePostConfig'
 import { getHubPostApiErrorMessage, usePosts } from '../hooks/usePosts'
@@ -23,7 +25,21 @@ export default function PostsManagementShell({
   registerOpenCreate?: (open: () => void) => void
 }) {
   const config = useMemo(() => getRolePostConfig(role), [role])
-  const postsApi = usePosts(role)
+  const { data: servicesData } = useGetServicesQuery({ page: 1, limit: 100 })
+
+  const serviceLabelById = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const doc of servicesData?.data ?? []) {
+      const service = mapServiceFromApi(doc)
+      map.set(
+        service.id,
+        service.serviceCode ? `${service.name} (${service.serviceCode})` : service.name,
+      )
+    }
+    return map
+  }, [servicesData?.data])
+
+  const postsApi = usePosts(role, serviceLabelById)
 
   const [formModal, setFormModal] = useState<{ mode: ModalMode; post?: Post | null }>({
     mode: 'closed',
@@ -118,7 +134,7 @@ export default function PostsManagementShell({
       <PostFiltersBar
         search={postsApi.search}
         onSearchChange={postsApi.setSearch}
-        searchPlaceholder="Search by panel, item, or caption"
+        searchPlaceholder="Search by panel, service, or caption"
         statusFilter={postsApi.statusFilter}
         onStatusChange={postsApi.setStatusFilter}
       />
@@ -137,6 +153,7 @@ export default function PostsManagementShell({
       <PostTable
         posts={postsApi.paginated}
         loading={postsApi.initialLoading || postsApi.isFetching}
+        serviceLabelById={serviceLabelById}
         sortKey={postsApi.sortKey}
         sortDir={postsApi.sortDir}
         onSort={postsApi.toggleSort}
@@ -171,7 +188,12 @@ export default function PostsManagementShell({
         onSubmit={handleFormSubmit}
       />
 
-      <PostDetailModal open={detailPost !== null} post={detailPost} onClose={() => setDetailPost(null)} />
+      <PostDetailModal
+        open={detailPost !== null}
+        post={detailPost}
+        serviceLabelById={serviceLabelById}
+        onClose={() => setDetailPost(null)}
+      />
     </div>
   )
 }

@@ -49,7 +49,7 @@ export function getHubPostApiErrorMessage(error: unknown, fallback: string) {
   return fallback
 }
 
-export function usePosts(role: Role) {
+export function usePosts(role: Role, serviceLabelById?: Map<string, string>) {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>(ALL_FILTER)
   const [sortKey, setSortKey] = useState<SortKey>('updatedAt')
@@ -79,9 +79,11 @@ export function usePosts(role: Role) {
         if (!row.campaignStatus || row.campaignStatus !== statusFilter) return false
       }
       if (!q) return true
+      const serviceName = serviceLabelById?.get(p.itemId) ?? ''
       return (
         row.panel.toLowerCase().includes(q) ||
         row.itemLabel.toLowerCase().includes(q) ||
+        serviceName.toLowerCase().includes(q) ||
         p.itemId.toLowerCase().includes(q) ||
         row.about.toLowerCase().includes(q)
       )
@@ -94,7 +96,11 @@ export function usePosts(role: Role) {
         case 'panel':
           return compareStrings(ra.panel, rb.panel, sortDir)
         case 'itemId':
-          return compareStrings(a.itemId, b.itemId, sortDir)
+          return compareStrings(
+            serviceLabelById?.get(a.itemId) ?? a.itemId,
+            serviceLabelById?.get(b.itemId) ?? b.itemId,
+            sortDir,
+          )
         case 'about':
           return compareStrings(ra.about, rb.about, sortDir)
         case 'amount':
@@ -116,7 +122,7 @@ export function usePosts(role: Role) {
     })
 
     return list
-  }, [posts, search, statusFilter, sortKey, sortDir])
+  }, [posts, search, statusFilter, sortKey, sortDir, serviceLabelById])
 
   const total = filteredSorted.length
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
