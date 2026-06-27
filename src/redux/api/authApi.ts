@@ -42,8 +42,16 @@ interface VerifyEmailPayload {
 interface VerifyEmailResponse {
     success: boolean;
     message: string;
-    // Backend returns the reset token in the "data" field
-    data: string;
+    data: string | { token: string };
+}
+
+function extractVerifyEmailToken(data: VerifyEmailResponse['data']): string | null {
+    if (!data) return null;
+    if (typeof data === 'string' && data.trim()) return data.trim();
+    if (typeof data === 'object' && typeof data.token === 'string' && data.token.trim()) {
+        return data.token.trim();
+    }
+    return null;
 }
 
 interface ResetPasswordPayload {
@@ -110,6 +118,79 @@ export interface UpdateMyProfilePayload {
     phone?: string;
     address?: string;
     profileImage?: string;
+}
+
+export interface BusinessRegisterPayload {
+    name: string;
+    email: string;
+    password: string;
+}
+
+export interface BusinessRegisterResponse {
+    success: boolean;
+    message: string;
+    data?: {
+        accessToken?: string;
+        refreshToken?: string;
+        role?: string;
+    };
+}
+
+export interface BusinessSocialLinks {
+    facebook?: string;
+    instagram?: string;
+    linkedin?: string;
+}
+
+export const DELIVERY_METHOD = {
+    IN_HOUSE_DELIVERY: 'in-house-delivery',
+    EXTERNAL_DELIVERY: 'external-delivery',
+    PICKUP: 'pickup',
+} as const;
+
+export type DeliveryMethodValue =
+    (typeof DELIVERY_METHOD)[keyof typeof DELIVERY_METHOD];
+
+export const DELIVERY_METHOD_OPTIONS: {
+    value: DeliveryMethodValue;
+    label: string;
+}[] = [
+    { value: DELIVERY_METHOD.IN_HOUSE_DELIVERY, label: 'In-house delivery' },
+    { value: DELIVERY_METHOD.EXTERNAL_DELIVERY, label: 'External delivery' },
+    { value: DELIVERY_METHOD.PICKUP, label: 'Pickup' },
+];
+
+export interface BusinessInformationPayload {
+    businessName: string;
+    description: string;
+    category: string;
+    socialLinks: BusinessSocialLinks;
+    coverImage: string;
+    businessLogo: string;
+    businessAddress: string;
+    businessLocation: string;
+    deliveryMethods: DeliveryMethodValue[];
+    latitude: number;
+    longitude: number;
+    businessPhone: string;
+}
+
+export interface BusinessInformationResponse {
+    success: boolean;
+    message: string;
+    data?: BusinessProfile;
+}
+
+export interface BusinessInfoVerifyPayload {
+    businessProof: string;
+    verificationDocumentType: string;
+    verificationDocument: string;
+}
+
+export interface BusinessInfoVerifyResponse {
+    success: boolean;
+    message: string;
+    data?: BusinessProfile;
 }
 
 const authApi = baseApi.injectEndpoints({
@@ -208,25 +289,59 @@ const authApi = baseApi.injectEndpoints({
                 method: 'POST',
                 body: credentials,
             }),
-            async onQueryStarted(_arg, { queryFulfilled }) {
+            async onQueryStarted(credentials, { queryFulfilled, dispatch }) {
                 try {
                     const { data } = await queryFulfilled;
-                    // Safely store the reset token from response.data into localStorage
-                    if (data?.data) {
-                        try {
-                            if (typeof localStorage !== 'undefined') {
-                                localStorage.setItem('resetPasswordToken', data.data);
-                            }
-                        } catch {
-                            // ignore storage errors
-                        }
+                    const token = extractVerifyEmailToken(data?.data);
+                    if (!token) return;
+
+                    if (typeof data.data === 'object' && data.data.token) {
+                        persistAuthStorage(token);
+                        dispatch(
+                            loginSuccess({
+                                token,
+                                email: credentials.email,
+                            }),
+                        );
+                        return;
+                    }
+
+                    if (typeof localStorage !== 'undefined') {
+                        localStorage.setItem('resetPasswordToken', token);
                     }
                 } catch {
-                    // ignore errors; normal RTK Query error handling will apply
+                    // RTK Query handles mutation errors
                 }
             },
             invalidatesTags: ['Auth'],
         }),
+
+        businessRegister: builder.mutation<BusinessRegisterResponse, BusinessRegisterPayload>({
+            query: (body) => ({
+                url: '/businesses/register',
+                method: 'POST',
+                body,
+            }),
+            invalidatesTags: ['Auth'],
+        }),
+        businessInformation: builder.mutation<BusinessInformationResponse, BusinessInformationPayload>({
+            query: (credentials) => ({
+                url: '/businesses/information',
+                method: 'PATCH',
+                body: credentials,
+            }),
+            invalidatesTags: ['Auth'],
+        }),
+
+        businessInfoVerify: builder.mutation<BusinessInfoVerifyResponse, BusinessInfoVerifyPayload>({
+            query: (credentials) => ({
+                url: '/businesses/information/verify',
+                method: 'POST',
+                body: credentials,
+            }),
+            invalidatesTags: ['Auth'],
+        }),
+
         resetPassword: builder.mutation<ResetPasswordResponse, ResetPasswordPayload>({
             query: (credentials) => {
                 // Read the reset token that was returned from verify-email
@@ -290,5 +405,8 @@ export const {
     useGetMyProfileQuery,
     useLazyGetMyProfileQuery,
     useUpdateMyProfileMutation,
+    useBusinessRegisterMutation,
+    useBusinessInformationMutation,
+    useBusinessInfoVerifyMutation,
 } =
     authApi
