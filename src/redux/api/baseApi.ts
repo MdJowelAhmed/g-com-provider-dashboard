@@ -36,6 +36,7 @@ export const baseApi = createApi({
   'HubPosts',
   'Services',
   'SubCategory',
+  'Rooms',
   'Setting',
 ],
   

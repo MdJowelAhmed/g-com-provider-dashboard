@@ -10,7 +10,8 @@ type Props = {
   offer?: Offer
   /** First message in a run — extra top spacing; consecutive same-author rows stay tighter */
   clusterTop: boolean
-  onWithdrawOffer?: (id: string) => void
+  onWithdrawOffer?: (id: string) => void | Promise<void>
+  withdrawingOfferId?: string | null
 }
 
 export default function MessageBubble({
@@ -18,6 +19,7 @@ export default function MessageBubble({
   offer,
   clusterTop,
   onWithdrawOffer,
+  withdrawingOfferId,
 }: Props) {
   const isLocal = message.author === 'local'
 
@@ -63,7 +65,11 @@ export default function MessageBubble({
         ) : null}
 
         {message.offerId && offer ? (
-          <OfferCard offer={offer} onWithdraw={onWithdrawOffer} />
+          <OfferCard
+            offer={offer}
+            onWithdraw={onWithdrawOffer}
+            withdrawing={withdrawingOfferId === offer.id}
+          />
         ) : null}
 
         <div

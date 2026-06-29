@@ -1,4 +1,4 @@
-import type { ChatApiDoc, MessageApiDoc } from '../../../redux/api/chatApi'
+import type { ChatApiDoc, MessageApiDoc, MessageCustomOfferRef } from '../../../redux/api/chatApi'
 import { resolveMediaUrl } from '../../../redux/api/chatApi'
 import type { Role } from '../../../types/role'
 import type { ChatMessage, Conversation, Offer, OfferStatus } from '../types'
@@ -131,6 +131,15 @@ function isLocalMessage(
   return senderId === currentUserId || isLocalSenderRole(doc.senderRole)
 }
 
+function resolveOfferId(offer: string | { _id: string }) {
+  return typeof offer === 'string' ? offer : offer._id
+}
+
+function resolveEmbeddedOffer(co: MessageCustomOfferRef) {
+  if (!co.offer || typeof co.offer === 'string') return null
+  return co.offer
+}
+
 function mapCustomOfferFromMessage(
   doc: MessageApiDoc,
   conversationId: string,
@@ -139,33 +148,50 @@ function mapCustomOfferFromMessage(
   const co = doc.customOffer
   if (doc.type !== 'custom_offer' || !co?.offer) return null
 
-  const subtotal = co.price * co.quantity
-  const fees = co.deliveryFee ?? 0
+  const embedded = resolveEmbeddedOffer(co)
+  const offerId = resolveOfferId(co.offer)
+  const meta = embedded?.meta ?? doc.meta
+  const price = co.price ?? embedded?.price ?? 0
+  const quantity = co.quantity ?? embedded?.quantity ?? 1
+  const subtotal = price * quantity
+  const fees = embedded?.deliveryFee ?? co.deliveryFee ?? 0
+  const status = co.status ?? embedded?.status ?? 'pending'
+  const title = co.title ?? embedded?.title ?? doc.text
+  const description = co.description ?? embedded?.description
+  const notes = co.notes ?? embedded?.notes
+  const itemType = embedded?.itemType ?? co.offerType
+  const itemRef = co.itemRef ?? embedded?.itemId ?? offerId
 
   return {
-    id: co.offer,
+    id: offerId,
     conversationId,
-    status: normalizeOfferStatus(co.status),
-    title: co.title,
-    description: co.description,
-    notes: co.notes,
-    itemType: co.offerType,
-    startDate: co.startDate ?? doc.meta?.startTime,
+    status: normalizeOfferStatus(status),
+    title,
+    description,
+    notes,
+    itemType,
+    startDate: co.startDate ?? meta?.startTime,
+    eventDate: meta?.eventDate,
+    checkIn: meta?.checkIn,
+    checkOut: meta?.checkOut,
+    adult: meta?.adult,
+    children: meta?.children,
+    offerDeliveryMethod: meta?.deliveryMethod,
     lineItems: [
       {
-        id: co.itemRef,
-        label: co.title,
-        unitPrice: co.price,
-        quantity: co.quantity,
+        id: itemRef,
+        label: title,
+        unitPrice: price,
+        quantity,
       },
     ],
     deliveryMethod: 'delivery',
     currency: 'USD',
     subtotal,
     fees,
-    total: subtotal + fees,
-    createdAt: doc.createdAt,
-    updatedAt: doc.updatedAt,
+    total: embedded?.totalAmount ?? subtotal + fees,
+    createdAt: embedded?.createdAt ?? doc.createdAt,
+    updatedAt: embedded?.updatedAt ?? doc.updatedAt,
     createdBy: isLocalMessage(doc, currentUserId) ? 'local' : 'remote',
   }
 }
@@ -199,7 +225,7 @@ export function mapMessageFromApi(
       createdAt: doc.createdAt,
       author: isLocal ? 'local' : 'remote',
       delivery: (doc.seenBy?.length ?? 0) > 0 ? 'seen' : 'delivered',
-      offerId: doc.customOffer!.offer,
+      offerId: resolveOfferId(doc.customOffer!.offer!),
     }
   }
 

@@ -1,10 +1,11 @@
 import { motion } from 'framer-motion'
-import { Calendar, Package } from 'lucide-react'
+import { Calendar, Package, Truck, Users } from 'lucide-react'
 import type { Offer } from '../types'
 
 type Props = {
   offer: Offer
   onWithdraw?: (id: string) => void
+  withdrawing?: boolean
 }
 
 const statusStyle: Record<
@@ -24,10 +25,96 @@ function formatItemType(value?: string) {
   return value.charAt(0).toUpperCase() + value.slice(1)
 }
 
+function formatDeliveryMethod(value?: string) {
+  if (!value) return ''
+  return value
+    .split('-')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ')
+}
+
+function formatDate(value: string) {
+  return new Date(value).toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  })
+}
+
+function formatDateTime(value: string) {
+  return new Date(value).toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+function OfferMetaDetails({ offer }: { offer: Offer }) {
+  const itemType = offer.itemType?.toLowerCase()
+
+  if (itemType === 'service' && offer.startDate) {
+    return (
+      <span className="inline-flex items-center gap-1">
+        <Calendar size={11} />
+        {formatDateTime(offer.startDate)}
+      </span>
+    )
+  }
+
+  if (itemType === 'product' && offer.offerDeliveryMethod) {
+    return (
+      <span className="inline-flex items-center gap-1">
+        <Truck size={11} />
+        {formatDeliveryMethod(offer.offerDeliveryMethod)}
+      </span>
+    )
+  }
+
+  if (itemType === 'room' && (offer.checkIn || offer.checkOut)) {
+    return (
+      <span className="inline-flex items-center gap-1">
+        <Calendar size={11} />
+        {offer.checkIn ? formatDate(offer.checkIn) : '—'}
+        {' → '}
+        {offer.checkOut ? formatDate(offer.checkOut) : '—'}
+        {(offer.adult ?? 0) > 0 || (offer.children ?? 0) > 0 ? (
+          <span className="inline-flex items-center gap-1">
+            <Users size={11} />
+            {offer.adult ?? 0} adults
+            {(offer.children ?? 0) > 0 ? `, ${offer.children} children` : ''}
+          </span>
+        ) : null}
+      </span>
+    )
+  }
+
+  if (itemType === 'event' && offer.eventDate) {
+    return (
+      <span className="inline-flex items-center gap-1">
+        <Calendar size={11} />
+        {formatDate(offer.eventDate)}
+      </span>
+    )
+  }
+
+  if (offer.startDate) {
+    return (
+      <span className="inline-flex items-center gap-1">
+        <Calendar size={11} />
+        {formatDateTime(offer.startDate)}
+      </span>
+    )
+  }
+
+  return null
+}
+
 /** Compact offer card — layout preserved for all roles */
-export default function OfferCard({ offer, onWithdraw }: Props) {
+export default function OfferCard({ offer, onWithdraw, withdrawing }: Props) {
   const meta = statusStyle[offer.status]
   const canWithdraw = offer.status === 'pending' && offer.createdBy === 'local'
+  const metaDetails = <OfferMetaDetails offer={offer} />
 
   return (
     <motion.div
@@ -46,17 +133,7 @@ export default function OfferCard({ offer, onWithdraw }: Props) {
             <div className="truncate text-sm font-semibold text-gray-100">{offer.title}</div>
             <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-gray-500">
               <span>{formatItemType(offer.itemType)}</span>
-              {offer.startDate ? (
-                <span className="inline-flex items-center gap-1">
-                  <Calendar size={11} />
-                  {new Date(offer.startDate).toLocaleString(undefined, {
-                    month: 'short',
-                    day: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}
-                </span>
-              ) : null}
+              {metaDetails}
             </div>
           </div>
         </div>
@@ -111,9 +188,10 @@ export default function OfferCard({ offer, onWithdraw }: Props) {
         <button
           type="button"
           onClick={() => onWithdraw(offer.id)}
-          className="mt-3 w-full rounded-lg border border-surface-border py-2 text-xs font-medium text-gray-300 transition hover:border-accent-danger/50 hover:bg-accent-danger/10 hover:text-accent-danger"
+          disabled={withdrawing}
+          className="mt-3 w-full rounded-lg border border-surface-border py-2 text-xs font-medium text-gray-300 transition hover:border-accent-danger/50 hover:bg-accent-danger/10 hover:text-accent-danger disabled:cursor-not-allowed disabled:opacity-60"
         >
-          Withdraw offer
+          {withdrawing ? 'Withdrawing…' : 'Withdraw offer'}
         </button>
       ) : null}
     </motion.div>

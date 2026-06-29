@@ -19,7 +19,8 @@ type Props = {
   onSend: (text: string) => void
   onAttach: () => void
   onOpenOffer: () => void
-  onWithdrawOffer: (id: string) => void
+  onWithdrawOffer: (id: string) => void | Promise<void>
+  withdrawingOfferId?: string | null
   loading?: boolean
   sending?: boolean
   labels: {
@@ -42,6 +43,7 @@ export default function ChatThreadPanel({
   onAttach,
   onOpenOffer,
   onWithdrawOffer,
+  withdrawingOfferId,
   loading,
   sending,
   labels,
@@ -161,7 +163,12 @@ export default function ChatThreadPanel({
                     transform: `translateY(${vi.start}px)`,
                   }}
                 >
-                  <RowView row={row} offerById={offerById} onWithdrawOffer={onWithdrawOffer} />
+                  <RowView
+                    row={row}
+                    offerById={offerById}
+                    onWithdrawOffer={onWithdrawOffer}
+                    withdrawingOfferId={withdrawingOfferId}
+                  />
                 </div>
               )
             })}
@@ -176,7 +183,13 @@ export default function ChatThreadPanel({
             </div>
           ) : (
             rows.map((row) => (
-              <RowView key={row.id} row={row} offerById={offerById} onWithdrawOffer={onWithdrawOffer} />
+              <RowView
+                key={row.id}
+                row={row}
+                offerById={offerById}
+                onWithdrawOffer={onWithdrawOffer}
+                withdrawingOfferId={withdrawingOfferId}
+              />
             ))
           )}
           <div ref={endRef} className="h-px w-full shrink-0" />
@@ -204,10 +217,12 @@ function RowView({
   row,
   offerById,
   onWithdrawOffer,
+  withdrawingOfferId,
 }: {
   row: ReturnType<typeof buildThreadRows>[number]
   offerById: Record<string, Offer | undefined>
-  onWithdrawOffer: (id: string) => void
+  onWithdrawOffer: (id: string) => void | Promise<void>
+  withdrawingOfferId?: string | null
 }) {
   if (row.kind === 'day') {
     return (
@@ -227,6 +242,7 @@ function RowView({
       offer={offer}
       clusterTop={row.clusterTop}
       onWithdrawOffer={onWithdrawOffer}
+      withdrawingOfferId={withdrawingOfferId}
     />
   )
 }

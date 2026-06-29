@@ -33,6 +33,7 @@ export default function MessagingShell({ role }: Props) {
     setOfferModalOpen,
     createOffer,
     withdrawOffer,
+    withdrawingOfferId,
     errorBanner,
     dismissError,
     unreadTotal,
@@ -83,6 +84,7 @@ export default function MessagingShell({ role }: Props) {
           onAttach={attachPlaceholder}
           onOpenOffer={() => setOfferModalOpen(true)}
           onWithdrawOffer={withdrawOffer}
+          withdrawingOfferId={withdrawingOfferId}
           loading={messagesLoading}
           sending={isSending}
           labels={{
@@ -94,7 +96,7 @@ export default function MessagingShell({ role }: Props) {
 
       <OfferModal
         open={offerModalOpen}
-        role={role}
+        businessCategory={user?.extra?.category}
         config={config}
         submitting={isCreatingOffer}
         onClose={() => setOfferModalOpen(false)}

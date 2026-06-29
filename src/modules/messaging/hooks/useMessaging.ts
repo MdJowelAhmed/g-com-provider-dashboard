@@ -3,13 +3,14 @@ import type { FetchBaseQueryError } from '@reduxjs/toolkit/query'
 import type { Role } from '../../../types/role'
 import {
   useCustomOfferCreateMutation,
+  useCustomOfferWithdrawMutation,
   useGetChatMessagesQuery,
   useGetChatsQuery,
   useSendMessageMutation,
+  type CustomOfferMeta,
 } from '../../../redux/api/chatApi'
 import { getRoleMessagingConfig } from '../config/roleMessagingConfig'
 import type { Offer } from '../types'
-import { itemTypeForRole } from '../utils/offerHelpers'
 import { mapChatFromApi, mapThreadFromApi } from '../utils/chatMapping'
 
 export type CreateOfferInput = {
@@ -19,9 +20,9 @@ export type CreateOfferInput = {
   notes: string
   price: number
   quantity: number
-  deliveryFee: number
+  deliveryFee?: number
   itemType: string
-  startTime?: string
+  meta?: CustomOfferMeta
 }
 
 const CHAT_FETCH_LIMIT = 100
@@ -51,7 +52,7 @@ export function useMessaging(role: Role, currentUserId: string) {
   const [convPage, setConvPage] = useState(1)
   const [offerModalOpen, setOfferModalOpen] = useState(false)
   const [errorBanner, setErrorBanner] = useState<string | null>(null)
-  const [withdrawnOfferIds, setWithdrawnOfferIds] = useState<string[]>([])
+  const [withdrawingOfferId, setWithdrawingOfferId] = useState<string | null>(null)
 
   const {
     data: chatsData,
@@ -83,6 +84,7 @@ export function useMessaging(role: Role, currentUserId: string) {
 
   const [sendMessage, { isLoading: isSending }] = useSendMessageMutation()
   const [customOfferCreate, { isLoading: isCreatingOffer }] = useCustomOfferCreateMutation()
+  const [customOfferWithdraw] = useCustomOfferWithdrawMutation()
 
   const selectedConversation = useMemo(
     () => conversations.find((c) => c.id === selectedId) ?? null,
@@ -96,13 +98,8 @@ export function useMessaging(role: Role, currentUserId: string) {
       selectedId,
       currentUserId,
     )
-    const mergedOffers = thread.offers.map((offer) =>
-      withdrawnOfferIds.includes(offer.id)
-        ? { ...offer, status: 'withdrawn' as const, updatedAt: new Date().toISOString() }
-        : offer,
-    )
-    return { messages: thread.messages, offers: mergedOffers }
-  }, [messagesData?.data, selectedId, currentUserId, withdrawnOfferIds])
+    return { messages: thread.messages, offers: thread.offers }
+  }, [messagesData?.data, selectedId, currentUserId])
 
   const filteredConversations = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -171,9 +168,9 @@ export function useMessaging(role: Role, currentUserId: string) {
           notes: input.notes,
           price: input.price,
           quantity: input.quantity,
-          deliveryFee: input.deliveryFee,
-          itemType: input.itemType || itemTypeForRole(role),
-          ...(input.startTime ? { meta: { startTime: input.startTime } } : {}),
+          itemType: input.itemType,
+          ...(input.deliveryFee !== undefined ? { deliveryFee: input.deliveryFee } : {}),
+          ...(input.meta && Object.keys(input.meta).length > 0 ? { meta: input.meta } : {}),
         }).unwrap()
         setOfferModalOpen(false)
       } catch (error) {
@@ -181,14 +178,23 @@ export function useMessaging(role: Role, currentUserId: string) {
         throw error
       }
     },
-    [selectedId, selectedConversation, customOfferCreate, role],
+    [selectedId, selectedConversation, customOfferCreate],
   )
 
-  const withdrawOffer = useCallback((offerId: string) => {
-    setWithdrawnOfferIds((prev) =>
-      prev.includes(offerId) ? prev : [...prev, offerId],
-    )
-  }, [])
+  const withdrawOffer = useCallback(
+    async (offerId: string) => {
+      if (!selectedId || withdrawingOfferId) return
+      setWithdrawingOfferId(offerId)
+      try {
+        await customOfferWithdraw({ offerId, chat: selectedId }).unwrap()
+      } catch (error) {
+        setErrorBanner(getChatApiErrorMessage(error, 'Failed to withdraw offer'))
+      } finally {
+        setWithdrawingOfferId(null)
+      }
+    },
+    [selectedId, withdrawingOfferId, customOfferWithdraw],
+  )
 
   const dismissError = useCallback(() => setErrorBanner(null), [])
 
@@ -222,6 +228,7 @@ export function useMessaging(role: Role, currentUserId: string) {
     setOfferModalOpen,
     createOffer,
     withdrawOffer,
+    withdrawingOfferId,
     errorBanner: errorBanner ?? threadError ?? listError,
     dismissError,
     unreadTotal,

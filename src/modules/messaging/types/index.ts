@@ -89,6 +89,12 @@ export type Offer = {
   notes?: string
   itemType?: string
   startDate?: string
+  eventDate?: string
+  checkIn?: string
+  checkOut?: string
+  adult?: number
+  children?: number
+  offerDeliveryMethod?: string
 }
 
 export type RoleMessagingLabels = {

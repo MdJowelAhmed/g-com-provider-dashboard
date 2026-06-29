@@ -4,49 +4,42 @@ import {
   Search,
   Pencil,
   Trash2,
-  Eye,
-  EyeOff,
-  Star,
   ImageOff,
   Bed,
   Users,
-  Wifi,
-  Snowflake,
-  Coffee,
-  Maximize2,
 } from 'lucide-react'
-import { Modal } from 'antd'
+import { Modal, message } from 'antd'
+import type { FetchBaseQueryError } from '@reduxjs/toolkit/query'
 import PageHeader from '../../../components/dashboard/PageHeader'
 import RoomFormDrawer from './RoomFormDrawer'
-import ReviewsDrawer, { type ReviewEntry } from '../../../components/dashboard/ReviewsDrawer'
+import { ROOM_TYPE_OPTIONS, type Room, type RoomFormValues } from './roomTypes'
+import { formValuesToRoomPayload, mapRoomFromApi } from './roomMapping'
 import {
-  INITIAL_ROOMS,
-  ROOM_TYPE_OPTIONS,
-  ROOM_OPERATIONAL_STATUS_OPTIONS,
-  BED_TYPE_OPTIONS,
-  type Room,
-  type RoomOperationalStatus,
-  type BedType,
-} from './roomTypes'
-import { INITIAL_STAY_BOOKINGS } from './stayBookingTypes'
+  useCreateRoomMutation,
+  useDeleteRoomMutation,
+  useGetRoomsQuery,
+  useUpdateRoomMutation,
+} from '../../../redux/api/roomApi'
+import { useGetBusinessCategoriesQuery } from '../../../redux/api/businessCategoryApi'
+import { useGetShopsQuery } from '../../../redux/api/shopManagementApi'
 
 type ModalState = { mode: 'closed' } | { mode: 'add' } | { mode: 'edit'; room: Room }
 
 const allFilter = '__all__'
 
-const statusToneClass: Record<RoomOperationalStatus, string> = {
-  available: 'bg-accent-success/15 text-accent-success',
-  occupied: 'bg-blue-500/15 text-blue-400',
-  cleaning: 'bg-accent-amber/15 text-accent-amber',
-  maintenance: 'bg-brand/20 text-brand-cream',
-  out_of_service: 'bg-accent-danger/15 text-accent-danger',
-}
-
-function makeId() {
-  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
-    return `r_${crypto.randomUUID().slice(0, 8)}`
+function getApiErrorMessage(error: unknown, fallback: string) {
+  if (error && typeof error === 'object' && 'data' in error) {
+    const data = (error as FetchBaseQueryError).data
+    if (data && typeof data === 'object') {
+      const payload = data as { message?: unknown; errorMessages?: { message?: string }[] }
+      if (typeof payload.message === 'string' && payload.message.trim()) {
+        return payload.message
+      }
+      const first = payload.errorMessages?.[0]?.message
+      if (first?.trim()) return first
+    }
   }
-  return `r_${Date.now().toString(36)}`
+  return fallback
 }
 
 function formatPrice(n: number | null | undefined) {
@@ -54,107 +47,87 @@ function formatPrice(n: number | null | undefined) {
   return `$${n.toFixed(0)}`
 }
 
-function statusLabel(s: RoomOperationalStatus) {
-  return ROOM_OPERATIONAL_STATUS_OPTIONS.find((o) => o.value === s)?.label ?? s
-}
-
-function bedLabel(b: BedType) {
-  return BED_TYPE_OPTIONS.find((o) => o.value === b)?.label ?? b
-}
-
 export default function RoomsPage() {
-  const [rooms, setRooms] = useState<Room[]>(INITIAL_ROOMS)
   const [modal, setModal] = useState<ModalState>({ mode: 'closed' })
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState<string>(allFilter)
   const [statusFilter, setStatusFilter] = useState<string>(allFilter)
-  const [acFilter, setAcFilter] = useState<string>(allFilter)
-  const [reviewsOpenId, setReviewsOpenId] = useState<string | null>(null)
 
-  const reviewsByRoom = useMemo(() => {
-    const map = new Map<string, ReviewEntry[]>()
-    for (const b of INITIAL_STAY_BOOKINGS) {
-      if (!b.review) continue
-      const arr = map.get(b.room.id) ?? []
-      arr.push({
-        id: b.id,
-        referenceCode: b.code,
-        customerName: b.guest.name,
-        referenceLabel: `${b.nights} night${b.nights === 1 ? '' : 's'}`,
-        rating: b.review.rating,
-        comment: b.review.comment,
-        createdAt: b.review.createdAt,
-      })
-      map.set(b.room.id, arr)
+  const { data, isLoading, isFetching, isError } = useGetRoomsQuery({ page: 1, limit: 100 })
+  const { data: shopsData } = useGetShopsQuery({ page: 1, limit: 100 })
+  const { data: categoriesData } = useGetBusinessCategoriesQuery()
+
+  const [createRoom, { isLoading: isCreating }] = useCreateRoomMutation()
+  const [updateRoom, { isLoading: isUpdating }] = useUpdateRoomMutation()
+  const [deleteRoom] = useDeleteRoomMutation()
+
+  const branchNameById = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const shop of shopsData?.data ?? []) {
+      map.set(shop._id, shop.branchName)
     }
     return map
-  }, [])
+  }, [shopsData?.data])
 
-  const ratingByRoom = useMemo(() => {
-    const out = new Map<string, { avg: number; count: number }>()
-    for (const [id, reviews] of reviewsByRoom) {
-      const sum = reviews.reduce((s, r) => s + r.rating, 0)
-      out.set(id, { avg: sum / reviews.length, count: reviews.length })
+  const businessCategoryNameById = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const category of categoriesData?.data ?? []) {
+      map.set(category._id, category.name)
     }
-    return out
-  }, [reviewsByRoom])
+    return map
+  }, [categoriesData?.data])
+
+  const rooms = useMemo(
+    () => (data?.data ?? []).map((doc) => mapRoomFromApi(doc)),
+    [data?.data],
+  )
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
     return rooms.filter((r) => {
       if (typeFilter !== allFilter && r.roomType !== typeFilter) return false
       if (statusFilter !== allFilter && r.status !== statusFilter) return false
-      if (acFilter === 'ac' && !r.hasAc) return false
-      if (acFilter === 'nonac' && r.hasAc) return false
       if (!q) return true
+      const branchName = branchNameById.get(r.branchId) ?? ''
+      const categoryName = businessCategoryNameById.get(r.businessCategoryId) ?? ''
       return (
         r.roomNumber.toLowerCase().includes(q) ||
         r.name.toLowerCase().includes(q) ||
-        r.code.toLowerCase().includes(q) ||
-        r.roomType.toLowerCase().includes(q)
+        r.roomCode.toLowerCase().includes(q) ||
+        r.roomType.toLowerCase().includes(q) ||
+        branchName.toLowerCase().includes(q) ||
+        categoryName.toLowerCase().includes(q)
       )
     })
-  }, [rooms, search, typeFilter, statusFilter, acFilter])
+  }, [rooms, search, typeFilter, statusFilter, branchNameById, businessCategoryNameById])
 
   const totals = useMemo(() => {
-    const available = rooms.filter((r) => r.status === 'available').length
-    const occupied = rooms.filter((r) => r.status === 'occupied').length
-    const cleaning = rooms.filter((r) => r.status === 'cleaning').length
-    const maintenance = rooms.filter(
-      (r) => r.status === 'maintenance' || r.status === 'out_of_service',
-    ).length
+    const active = rooms.filter((r) => r.status === 'active').length
     const avgRate =
-      rooms.length > 0
-        ? rooms.reduce((sum, r) => sum + r.basePrice, 0) / rooms.length
-        : 0
-    return {
-      total: rooms.length,
-      available,
-      occupied,
-      cleaning,
-      maintenance,
-      avgRate,
-    }
+      rooms.length > 0 ? rooms.reduce((sum, r) => sum + r.basePrice, 0) / rooms.length : 0
+    return { total: rooms.length, active, avgRate }
   }, [rooms])
 
-  const handleSubmit = (values: Omit<Room, 'id' | 'createdAt'>) => {
-    if (modal.mode === 'edit') {
-      setRooms((prev) =>
-        prev.map((r) => (r.id === modal.room.id ? { ...r, ...values } : r)),
-      )
-    } else if (modal.mode === 'add') {
-      const next: Room = {
-        ...values,
-        id: makeId(),
-        createdAt: new Date().toISOString(),
+  const handleSubmit = async (values: RoomFormValues) => {
+    const payload = formValuesToRoomPayload(values)
+    try {
+      if (modal.mode === 'edit') {
+        await updateRoom({ id: modal.room.id, body: payload }).unwrap()
+        message.success('Room updated')
+      } else if (modal.mode === 'add') {
+        await createRoom(payload).unwrap()
+        message.success('Room created')
       }
-      setRooms((prev) => [next, ...prev])
+      setModal({ mode: 'closed' })
+    } catch (error) {
+      message.error(
+        getApiErrorMessage(
+          error,
+          modal.mode === 'edit' ? 'Failed to update room' : 'Failed to create room',
+        ),
+      )
+      throw error
     }
-    setModal({ mode: 'closed' })
-  }
-
-  const toggleHidden = (id: string) => {
-    setRooms((prev) => prev.map((r) => (r.id === id ? { ...r, hidden: !r.hidden } : r)))
   }
 
   const confirmDelete = (r: Room) => {
@@ -162,14 +135,21 @@ export default function RoomsPage() {
       title: 'Delete room?',
       content: (
         <span>
-          Delete <b>{r.name}</b> (#{r.roomNumber})? This can't be undone.
+          Delete <b>{r.name}</b> (#{r.roomNumber})? This can&apos;t be undone.
         </span>
       ),
       okText: 'Delete',
       okButtonProps: { danger: true },
       cancelText: 'Cancel',
       centered: true,
-      onOk: () => setRooms((prev) => prev.filter((x) => x.id !== r.id)),
+      onOk: async () => {
+        try {
+          await deleteRoom(r.id).unwrap()
+          message.success('Room deleted')
+        } catch (error) {
+          message.error(getApiErrorMessage(error, 'Failed to delete room'))
+        }
+      },
     })
   }
 
@@ -177,7 +157,7 @@ export default function RoomsPage() {
     <div>
       <PageHeader
         title="Rooms"
-        description="Configure each room — beds, facilities, pricing, and availability."
+        description="Configure each room — beds, amenities, pricing, and availability."
         actions={
           <button
             type="button"
@@ -189,12 +169,9 @@ export default function RoomsPage() {
         }
       />
 
-      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
         <SummaryTile label="Total" value={totals.total} tone="neutral" />
-        <SummaryTile label="Available" value={totals.available} tone="success" />
-        <SummaryTile label="Occupied" value={totals.occupied} tone="info" />
-        <SummaryTile label="Cleaning" value={totals.cleaning} tone="warning" />
-        <SummaryTile label="Out of service" value={totals.maintenance} tone="danger" />
+        <SummaryTile label="Active" value={totals.active} tone="success" />
         <SummaryTile
           label="Avg. rate"
           value={`$${totals.avgRate.toFixed(0)}`}
@@ -204,7 +181,7 @@ export default function RoomsPage() {
       </div>
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <div className="relative flex-1 min-w-[240px]">
+        <div className="relative min-w-[240px] flex-1">
           <Search
             size={14}
             className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"
@@ -235,42 +212,42 @@ export default function RoomsPage() {
           className="h-10 rounded-md border border-surface-border bg-surface-card px-3 text-sm text-gray-100 focus:border-brand focus:outline-none"
         >
           <option value={allFilter}>All statuses</option>
-          {ROOM_OPERATIONAL_STATUS_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-        <select
-          value={acFilter}
-          onChange={(e) => setAcFilter(e.target.value)}
-          className="h-10 rounded-md border border-surface-border bg-surface-card px-3 text-sm text-gray-100 focus:border-brand focus:outline-none"
-        >
-          <option value={allFilter}>AC & Non-AC</option>
-          <option value="ac">AC only</option>
-          <option value="nonac">Non-AC only</option>
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
         </select>
       </div>
 
+      {isError ? (
+        <div className="mb-4 rounded-md border border-accent-danger/30 bg-accent-danger/10 px-4 py-3 text-sm text-accent-danger">
+          Failed to load rooms. Please refresh and try again.
+        </div>
+      ) : null}
+
       <div className="overflow-hidden rounded-xl border border-surface-border bg-surface-card">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1280px] text-sm">
+          <table className="w-full min-w-[1100px] text-sm">
             <thead>
               <tr className="border-b border-surface-border bg-surface-elevated text-left text-xs uppercase tracking-wide text-gray-400">
                 <th className="px-4 py-3 font-medium">Room</th>
                 <th className="px-4 py-3 font-medium">Type</th>
                 <th className="px-4 py-3 font-medium">Bed</th>
                 <th className="px-4 py-3 font-medium">Capacity</th>
-                <th className="px-4 py-3 font-medium">Size / Floor</th>
-                <th className="px-4 py-3 font-medium">Facilities</th>
+                <th className="px-4 py-3 font-medium">Size</th>
+                <th className="px-4 py-3 font-medium">Amenities</th>
+                <th className="px-4 py-3 font-medium">Branch</th>
                 <th className="px-4 py-3 text-right font-medium">Price / night</th>
-                <th className="px-4 py-3 font-medium">Rating</th>
                 <th className="px-4 py-3 font-medium">Status</th>
                 <th className="px-4 py-3 text-right font-medium">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.length === 0 ? (
+              {isLoading || isFetching ? (
+                <tr>
+                  <td colSpan={10} className="px-4 py-10 text-center text-gray-500">
+                    Loading rooms…
+                  </td>
+                </tr>
+              ) : filtered.length === 0 ? (
                 <tr>
                   <td colSpan={10} className="px-4 py-10 text-center text-gray-500">
                     No rooms match your filters.
@@ -280,27 +257,15 @@ export default function RoomsPage() {
                 filtered.map((r) => (
                   <tr
                     key={r.id}
-                    className={`border-b border-surface-border last:border-b-0 hover:bg-surface-elevated ${
-                      r.hidden ? 'opacity-60' : ''
-                    }`}
+                    className="border-b border-surface-border last:border-b-0 hover:bg-surface-elevated"
                   >
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
                         <RoomThumb src={r.image} alt={r.name} />
                         <div className="min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-mono text-xs text-gray-500">
-                              #{r.roomNumber}
-                            </span>
-                            {r.featured && (
-                              <Star
-                                size={12}
-                                className="shrink-0 fill-accent-amber text-accent-amber"
-                              />
-                            )}
-                          </div>
+                          <div className="font-mono text-xs text-gray-500">#{r.roomNumber}</div>
                           <div className="truncate font-medium text-gray-100">{r.name}</div>
-                          <div className="text-[11px] text-gray-500">{r.code}</div>
+                          <div className="text-[11px] text-gray-500">{r.roomCode}</div>
                         </div>
                       </div>
                     </td>
@@ -310,7 +275,7 @@ export default function RoomsPage() {
                         <Bed size={13} className="text-gray-500" />
                         <span>
                           {r.bedCount > 1 ? `${r.bedCount} × ` : ''}
-                          {bedLabel(r.bedType)}
+                          {r.bedType}
                         </span>
                       </div>
                     </td>
@@ -318,83 +283,45 @@ export default function RoomsPage() {
                       <div className="inline-flex items-center gap-1">
                         <Users size={13} className="text-gray-500" />
                         <span>
-                          {r.maxAdults}A
+                          {r.maxAdult}A
                           {r.maxChildren > 0 ? ` + ${r.maxChildren}C` : ''}
                         </span>
                       </div>
-                      {r.extraBedAvailable ? (
-                        <div className="text-[11px] text-gray-500">Extra bed ok</div>
-                      ) : null}
+                      <div className="text-[11px] text-gray-500">Total {r.totalGuest}</div>
+                    </td>
+                    <td className="px-4 py-3 text-gray-300">{r.size || '—'}</td>
+                    <td className="px-4 py-3">
+                      {r.otherAmenities.length > 0 ? (
+                        <span
+                          className="rounded-full bg-surface-elevated px-2 py-0.5 text-[11px] text-gray-400"
+                          title={r.otherAmenities.join(', ')}
+                        >
+                          {r.otherAmenities.length} amenit
+                          {r.otherAmenities.length === 1 ? 'y' : 'ies'}
+                        </span>
+                      ) : (
+                        <span className="text-gray-600">—</span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-gray-300">
-                      <div className="text-sm">Floor {r.floor}</div>
-                      {r.sizeSqm ? (
-                        <div className="flex items-center gap-1 text-[11px] text-gray-500">
-                          <Maximize2 size={10} />
-                          {r.sizeSqm} m²
-                        </div>
-                      ) : null}
+                      {r.branchName ?? branchNameById.get(r.branchId) ?? '—'}
                     </td>
-                    <td className="px-4 py-3">
-                      <FacilityIcons room={r} />
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="font-semibold text-gray-100">
-                        {formatPrice(r.basePrice)}
-                      </div>
-                      {r.weekendPrice ? (
-                        <div className="text-[11px] text-gray-500">
-                          Weekend {formatPrice(r.weekendPrice)}
-                        </div>
-                      ) : null}
-                    </td>
-                    <td className="px-4 py-3">
-                      {(() => {
-                        const rating = ratingByRoom.get(r.id)
-                        if (!rating) return <span className="text-gray-600">—</span>
-                        return (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              setReviewsOpenId(r.id)
-                            }}
-                            className="flex flex-col items-start gap-0 rounded-md px-1 py-0.5 hover:bg-surface-card"
-                            title="View reviews"
-                          >
-                            <span className="inline-flex items-center gap-1 text-gray-100">
-                              <Star
-                                size={13}
-                                className="fill-accent-amber text-accent-amber"
-                              />
-                              <span className="text-sm font-semibold">
-                                {rating.avg.toFixed(1)}
-                              </span>
-                            </span>
-                            <span className="text-[11px] text-gray-500">
-                              {rating.count} review{rating.count === 1 ? '' : 's'}
-                            </span>
-                          </button>
-                        )
-                      })()}
+                    <td className="px-4 py-3 text-right font-semibold text-gray-100">
+                      {formatPrice(r.basePrice)}
                     </td>
                     <td className="px-4 py-3">
                       <span
                         className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                          statusToneClass[r.status]
+                          r.status === 'active'
+                            ? 'bg-accent-success/15 text-accent-success'
+                            : 'bg-gray-600/30 text-gray-400'
                         }`}
                       >
-                        {statusLabel(r.status)}
+                        {r.status}
                       </span>
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">
-                        <IconButton
-                          title={r.hidden ? 'Show on booking site' : 'Hide from booking site'}
-                          onClick={() => toggleHidden(r.id)}
-                        >
-                          {r.hidden ? <Eye size={15} /> : <EyeOff size={15} />}
-                        </IconButton>
                         <IconButton
                           title="Edit"
                           onClick={() => setModal({ mode: 'edit', room: r })}
@@ -418,83 +345,11 @@ export default function RoomsPage() {
         open={modal.mode !== 'closed'}
         mode={modal.mode === 'edit' ? 'edit' : 'add'}
         initial={modal.mode === 'edit' ? modal.room : null}
+        submitting={isCreating || isUpdating}
         onCancel={() => setModal({ mode: 'closed' })}
         onSubmit={handleSubmit}
       />
-
-      <ReviewsDrawer
-        open={reviewsOpenId !== null}
-        subject={
-          reviewsOpenId
-            ? rooms.find((r) => r.id === reviewsOpenId)?.name ?? null
-            : null
-        }
-        subjectCode={
-          reviewsOpenId
-            ? rooms.find((r) => r.id === reviewsOpenId)?.code ?? null
-            : null
-        }
-        reviews={reviewsOpenId ? reviewsByRoom.get(reviewsOpenId) ?? [] : []}
-        onClose={() => setReviewsOpenId(null)}
-      />
     </div>
-  )
-}
-
-function FacilityIcons({ room }: { room: Room }) {
-  return (
-    <div className="flex flex-wrap gap-1">
-      <FacilityBadge
-        active={room.hasAc}
-        label={room.hasAc ? 'AC' : 'No AC'}
-        icon={<Snowflake size={11} />}
-      />
-      <FacilityBadge
-        active={room.hasWifi}
-        label="Wi-Fi"
-        icon={<Wifi size={11} />}
-        mutedIfInactive
-      />
-      <FacilityBadge
-        active={room.breakfastIncluded}
-        label="Breakfast"
-        icon={<Coffee size={11} />}
-        mutedIfInactive
-      />
-      {room.amenities.length > 0 ? (
-        <span
-          className="rounded-full bg-surface-elevated px-2 py-0.5 text-[11px] text-gray-400"
-          title={room.amenities.join(', ')}
-        >
-          +{room.amenities.length}
-        </span>
-      ) : null}
-    </div>
-  )
-}
-
-function FacilityBadge({
-  active,
-  label,
-  icon,
-  mutedIfInactive,
-}: {
-  active: boolean
-  label: string
-  icon: React.ReactNode
-  mutedIfInactive?: boolean
-}) {
-  if (!active && mutedIfInactive) return null
-  const cls = active
-    ? 'bg-accent-success/15 text-accent-success'
-    : 'bg-gray-500/20 text-gray-400'
-  return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${cls}`}
-    >
-      {icon}
-      {label}
-    </span>
   )
 }
 

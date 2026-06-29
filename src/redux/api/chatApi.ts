@@ -43,18 +43,40 @@ export interface MessageSenderRef {
   role: string
 }
 
-export interface MessageCustomOfferRef {
-  offer: string
-  offerType: string
-  itemRef: string
-  title: string
+export interface MessageCustomOfferEmbedded {
+  _id: string
+  customer?: string
+  business?: string
+  branch?: string
+  chat?: string
+  itemType?: string
+  itemId?: string
+  title?: string
   description?: string
-  price: number
-  quantity: number
+  deliveryFee?: number
+  notes?: string
+  price?: number
+  quantity?: number
+  totalAmount?: number
+  status?: string
+  meta?: CustomOfferMeta
+  createdAt?: string
+  updatedAt?: string
+  message?: string
+}
+
+export interface MessageCustomOfferRef {
+  offer?: string | MessageCustomOfferEmbedded
+  offerType?: string
+  itemRef?: string
+  title?: string
+  description?: string
+  price?: number
+  quantity?: number
   deliveryFee?: number
   notes?: string
   startDate?: string
-  status: string
+  status?: string
 }
 
 export interface MessageApiDoc {
@@ -123,6 +145,12 @@ export type CustomOfferItemType = 'Service' | 'Product' | 'MenuItem' | 'Event' |
 
 export interface CustomOfferMeta {
   startTime?: string
+  deliveryMethod?: string
+  checkIn?: string
+  checkOut?: string
+  adult?: number
+  children?: number
+  eventDate?: string
 }
 
 export interface CustomOfferCreatePayload {
@@ -134,7 +162,7 @@ export interface CustomOfferCreatePayload {
   notes: string
   price: number
   quantity: number
-  deliveryFee: number
+  deliveryFee?: number
   itemType: CustomOfferItemType | string
   expiresAt?: string
   meta?: CustomOfferMeta
@@ -159,6 +187,17 @@ export interface CustomOfferApiDoc {
 }
 
 export interface CustomOfferCreateResponse {
+  success: boolean
+  message: string
+  data?: CustomOfferApiDoc
+}
+
+export interface CustomOfferWithdrawPayload {
+  offerId: string
+  chat: string
+}
+
+export interface CustomOfferWithdrawResponse {
   success: boolean
   message: string
   data?: CustomOfferApiDoc
@@ -213,6 +252,16 @@ const chatApi = baseApi.injectEndpoints({
         { type: 'Chats', id: `messages-${chat}` },
       ],
     }),
+    customOfferWithdraw: builder.mutation<CustomOfferWithdrawResponse, CustomOfferWithdrawPayload>({
+      query: ({ offerId }) => ({
+        url: `/custom-offers/${offerId}/withdraw`,
+        method: 'PATCH',
+      }),
+      invalidatesTags: (_result, _error, { chat }) => [
+        'Chats',
+        { type: 'Chats', id: `messages-${chat}` },
+      ],
+    }),
   }),
 })
 
@@ -221,4 +270,5 @@ export const {
   useGetChatMessagesQuery,
   useSendMessageMutation,
   useCustomOfferCreateMutation,
+  useCustomOfferWithdrawMutation,
 } = chatApi

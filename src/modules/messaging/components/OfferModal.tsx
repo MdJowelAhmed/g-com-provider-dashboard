@@ -1,15 +1,21 @@
 import { Modal } from 'antd'
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { useGetServicesQuery } from '../../../redux/api/serviceApi'
-import { mapServiceFromApi } from '../../../pages/dashboard/services/serviceMapping'
-import type { Role } from '../../../types/role'
+import { useEffect, useState, type ReactNode } from 'react'
 import type { RoleMessagingConfig } from '../types'
 import type { CreateOfferInput } from '../hooks/useMessaging'
-import { itemTypeForRole, toIsoStartTime } from '../utils/offerHelpers'
+import { useOfferCatalog } from '../hooks/useOfferCatalog'
+import { BUSINESS_MAIN_CATEGORIES } from '../../../types/businessCategory'
+import {
+  buildOfferMeta,
+  catalogEmptyLabel,
+  catalogItemLabel,
+  itemTypeForCategory,
+  OFFER_DELIVERY_METHOD_OPTIONS,
+  supportsDeliveryFee,
+} from '../utils/offerHelpers'
 
 type Props = {
   open: boolean
-  role: Role
+  businessCategory?: string
   config: RoleMessagingConfig
   submitting?: boolean
   onClose: () => void
@@ -21,21 +27,13 @@ const inputClass =
 
 export default function OfferModal({
   open,
-  role,
+  businessCategory,
   config,
   submitting,
   onClose,
   onSubmit,
 }: Props) {
-  const { data: servicesData, isLoading: servicesLoading } = useGetServicesQuery({
-    page: 1,
-    limit: 100,
-  })
-
-  const services = useMemo(
-    () => (servicesData?.data ?? []).map((doc) => mapServiceFromApi(doc)),
-    [servicesData?.data],
-  )
+  const { category, items, isLoading } = useOfferCatalog(businessCategory)
 
   const [selectedId, setSelectedId] = useState('')
   const [title, setTitle] = useState('')
@@ -45,14 +43,21 @@ export default function OfferModal({
   const [qty, setQty] = useState(1)
   const [deliveryFee, setDeliveryFee] = useState(0)
   const [startTime, setStartTime] = useState('')
+  const [deliveryMethod, setDeliveryMethod] = useState('delivery')
+  const [checkIn, setCheckIn] = useState('')
+  const [checkOut, setCheckOut] = useState('')
+  const [adult, setAdult] = useState(1)
+  const [children, setChildren] = useState(0)
+  const [eventDate, setEventDate] = useState('')
 
-  const selectedService = services.find((s) => s.id === selectedId)
-  const itemType = itemTypeForRole(role)
-  const showStartTime = role === 'services' || role === 'events' || role === 'stay'
+  const selectedItem = items.find((item) => item.id === selectedId)
+  const itemType = itemTypeForCategory(category)
+  const showDeliveryFee = supportsDeliveryFee(category)
+  const itemLabel = catalogItemLabel(category)
 
   useEffect(() => {
-    if (!open || services.length === 0) return
-    const first = services[0]
+    if (!open || items.length === 0) return
+    const first = items[0]
     setSelectedId(first.id)
     setTitle(first.name)
     setDescription(first.description)
@@ -61,23 +66,37 @@ export default function OfferModal({
     setQty(1)
     setDeliveryFee(0)
     setStartTime('')
-  }, [open, services])
+    setDeliveryMethod('delivery')
+    setCheckIn('')
+    setCheckOut('')
+    setAdult(1)
+    setChildren(0)
+    setEventDate('')
+  }, [open, items])
 
-  const handleServiceChange = (serviceId: string) => {
-    setSelectedId(serviceId)
-    const service = services.find((s) => s.id === serviceId)
-    if (!service) return
-    setTitle(service.name)
-    setDescription(service.description)
-    setPrice(service.price)
+  const handleItemChange = (itemId: string) => {
+    setSelectedId(itemId)
+    const item = items.find((entry) => entry.id === itemId)
+    if (!item) return
+    setTitle(item.name)
+    setDescription(item.description)
+    setPrice(item.price)
   }
 
   const subtotal = price * qty
-  const total = subtotal + deliveryFee
+  const total = subtotal + (showDeliveryFee ? deliveryFee : 0)
 
   const handleOk = async () => {
     if (!selectedId || !title.trim()) return
-    const isoStart = toIsoStartTime(startTime)
+    const meta = buildOfferMeta(category, {
+      startTime,
+      deliveryMethod,
+      checkIn,
+      checkOut,
+      adult,
+      children,
+      eventDate,
+    })
     await onSubmit({
       itemId: selectedId,
       title: title.trim(),
@@ -85,9 +104,9 @@ export default function OfferModal({
       notes: notes.trim(),
       price: Number(price),
       quantity: qty,
-      deliveryFee: Number(deliveryFee),
       itemType,
-      ...(isoStart ? { startTime: isoStart } : {}),
+      ...(showDeliveryFee ? { deliveryFee: Number(deliveryFee) } : {}),
+      ...(meta ? { meta } : {}),
     })
   }
 
@@ -114,28 +133,26 @@ export default function OfferModal({
       }}
       okButtonProps={{
         className: '!bg-brand hover:!bg-brand-hover !text-white !border-none',
-        disabled: !selectedId || !title.trim() || servicesLoading,
+        disabled: !selectedId || !title.trim() || isLoading,
         loading: submitting,
       }}
     >
       <div className="space-y-4 text-sm text-gray-200">
-        <Field label="Service / item">
-          {servicesLoading ? (
+        <Field label={itemLabel}>
+          {isLoading ? (
             <p className="mt-1 text-xs text-gray-500">Loading items…</p>
-          ) : services.length === 0 ? (
-            <p className="mt-1 text-xs text-accent-amber">
-              No services found. Add a service first to send an offer.
-            </p>
+          ) : items.length === 0 ? (
+            <p className="mt-1 text-xs text-accent-amber">{catalogEmptyLabel(category)}</p>
           ) : (
             <select
               value={selectedId}
-              onChange={(e) => handleServiceChange(e.target.value)}
+              onChange={(e) => handleItemChange(e.target.value)}
               className={inputClass}
             >
-              {services.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name} — ${s.price.toFixed(2)}
-                  {s.serviceCode ? ` (${s.serviceCode})` : ''}
+              {items.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name} — ${item.price.toFixed(2)}
+                  {item.subtitle ? ` (${item.subtitle})` : ''}
                 </option>
               ))}
             </select>
@@ -194,18 +211,36 @@ export default function OfferModal({
           </Field>
         </div>
 
-        <Field label="Delivery fee">
-          <input
-            type="number"
-            min={0}
-            step={0.01}
-            value={deliveryFee}
-            onChange={(e) => setDeliveryFee(Math.max(0, Number(e.target.value) || 0))}
-            className={`${inputClass} font-mono`}
-          />
-        </Field>
+        {showDeliveryFee ? (
+          <>
+            <Field label="Delivery method">
+              <select
+                value={deliveryMethod}
+                onChange={(e) => setDeliveryMethod(e.target.value)}
+                className={inputClass}
+              >
+                {OFFER_DELIVERY_METHOD_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </Field>
 
-        {showStartTime ? (
+            <Field label="Delivery fee">
+              <input
+                type="number"
+                min={0}
+                step={0.01}
+                value={deliveryFee}
+                onChange={(e) => setDeliveryFee(Math.max(0, Number(e.target.value) || 0))}
+                className={`${inputClass} font-mono`}
+              />
+            </Field>
+          </>
+        ) : null}
+
+        {category === BUSINESS_MAIN_CATEGORIES.SERVICES ? (
           <Field label="Start time (optional)">
             <input
               type="datetime-local"
@@ -216,23 +251,79 @@ export default function OfferModal({
           </Field>
         ) : null}
 
+        {category === BUSINESS_MAIN_CATEGORIES.STAY ? (
+          <>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Check-in">
+                <input
+                  type="date"
+                  value={checkIn}
+                  onChange={(e) => setCheckIn(e.target.value)}
+                  className={inputClass}
+                />
+              </Field>
+              <Field label="Check-out">
+                <input
+                  type="date"
+                  value={checkOut}
+                  onChange={(e) => setCheckOut(e.target.value)}
+                  className={inputClass}
+                />
+              </Field>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Adults">
+                <input
+                  type="number"
+                  min={1}
+                  value={adult}
+                  onChange={(e) => setAdult(Math.max(1, Number(e.target.value) || 1))}
+                  className={`${inputClass} font-mono`}
+                />
+              </Field>
+              <Field label="Children">
+                <input
+                  type="number"
+                  min={0}
+                  value={children}
+                  onChange={(e) => setChildren(Math.max(0, Number(e.target.value) || 0))}
+                  className={`${inputClass} font-mono`}
+                />
+              </Field>
+            </div>
+          </>
+        ) : null}
+
+        {category === BUSINESS_MAIN_CATEGORIES.EVENT ? (
+          <Field label="Event date">
+            <input
+              type="date"
+              value={eventDate}
+              onChange={(e) => setEventDate(e.target.value)}
+              className={inputClass}
+            />
+          </Field>
+        ) : null}
+
         <div className="rounded-xl border border-surface-border bg-surface-elevated p-4">
           <div className="flex justify-between text-xs text-gray-500">
             <span>Subtotal</span>
             <span className="font-mono text-gray-300">USD {subtotal.toFixed(2)}</span>
           </div>
-          <div className="mt-2 flex justify-between text-xs text-gray-500">
-            <span>Delivery fee</span>
-            <span className="font-mono text-gray-300">USD {deliveryFee.toFixed(2)}</span>
-          </div>
+          {showDeliveryFee ? (
+            <div className="mt-2 flex justify-between text-xs text-gray-500">
+              <span>Delivery fee</span>
+              <span className="font-mono text-gray-300">USD {deliveryFee.toFixed(2)}</span>
+            </div>
+          ) : null}
           <div className="mt-3 flex justify-between border-t border-surface-border pt-3 text-sm font-semibold text-white">
             <span>Customer pays</span>
             <span className="font-mono">USD {total.toFixed(2)}</span>
           </div>
-          {selectedService ? (
+          {selectedItem ? (
             <p className="mt-2 text-[11px] text-gray-500">
               Item type · {itemType}
-              {selectedService.duration ? ` · ${selectedService.duration}` : ''}
+              {selectedItem.subtitle ? ` · ${selectedItem.subtitle}` : ''}
             </p>
           ) : null}
         </div>
