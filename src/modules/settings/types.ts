@@ -2,8 +2,6 @@ export type SettingsTabId =
   | 'personal'
   | 'business'
   | 'security'
-  | 'media'
-  | 'social'
   | 'documents'
   | 'notifications'
   | 'account'

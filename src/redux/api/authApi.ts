@@ -83,6 +83,11 @@ export interface BusinessProfile {
     paymentsActive?: boolean;
     isBusinessVerified?: boolean;
     socialLinks?: Record<string, string>;
+    deliveryMethods?: string[];
+    location?: {
+        type?: string;
+        coordinates?: [number, number];
+    };
 }
 
 export interface UserProfile {

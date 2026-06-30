@@ -6,11 +6,9 @@ import SettingsTabList from '../../../modules/settings/components/SettingsTabLis
 import AccountPanel from '../../../modules/settings/components/panels/AccountPanel'
 import BusinessPanel from '../../../modules/settings/components/panels/BusinessPanel'
 import DocumentsPanel from '../../../modules/settings/components/panels/DocumentsPanel'
-import MediaPanel from '../../../modules/settings/components/panels/MediaPanel'
 import NotificationsPanel from '../../../modules/settings/components/panels/NotificationsPanel'
 import PersonalPanel from '../../../modules/settings/components/panels/PersonalPanel'
 import SecurityPanel from '../../../modules/settings/components/panels/SecurityPanel'
-import SocialPanel from '../../../modules/settings/components/panels/SocialPanel'
 import { useUnsavedChanges } from '../../../modules/settings/hooks/useUnsavedChanges'
 import type { SettingsTabId } from '../../../modules/settings/types'
 
@@ -107,10 +105,6 @@ export default function SettingsPage() {
               <BusinessPanel {...panelProps} />
             ) : tab === 'security' ? (
               <SecurityPanel onDirty={onDirty} onSaved={onSaved} />
-            ) : tab === 'media' ? (
-              <MediaPanel {...panelProps} />
-            ) : tab === 'social' ? (
-              <SocialPanel {...panelProps} />
             ) : tab === 'documents' ? (
               <DocumentsPanel {...panelProps} />
             ) : tab === 'notifications' ? (
