@@ -1,20 +1,26 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Modal, Form, Input, InputNumber, Select, Switch, Row, Col, Divider } from 'antd'
+import ImageUploader from '../../../components/common/ImageUploader'
 import {
   PRODUCT_CATEGORIES,
   PRODUCT_STATUS_OPTIONS,
   type Product,
 } from './productTypes'
 
+export type ProductSubmitValues = Omit<Product, 'id' | 'createdAt' | 'updatedAt'> & {
+  imageFile: File | null
+}
+
 type Props = {
   open: boolean
   mode: 'add' | 'edit'
   initial?: Product | null
   onCancel: () => void
-  onSubmit: (values: Omit<Product, 'id' | 'createdAt'>) => void
+  submitting?: boolean
+  onSubmit: (values: ProductSubmitValues) => void
 }
 
-type FormValues = Omit<Product, 'id' | 'createdAt'>
+type FormValues = Omit<Product, 'id' | 'createdAt' | 'updatedAt'>
 
 const blankValues: FormValues = {
   image: '',
@@ -36,18 +42,29 @@ const blankValues: FormValues = {
   featured: false,
 }
 
-export default function ProductFormModal({ open, mode, initial, onCancel, onSubmit }: Props) {
+export default function ProductFormModal({
+  open,
+  mode,
+  initial,
+  onCancel,
+  submitting = false,
+  onSubmit,
+}: Props) {
   const [form] = Form.useForm<FormValues>()
+  const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null)
 
   useEffect(() => {
     if (!open) return
     if (mode === 'edit' && initial) {
-      const { id: _id, createdAt: _c, ...rest } = initial
+      const { id: _id, createdAt: _c, updatedAt: _u, ...rest } = initial
       void _id
       void _c
+      void _u
       form.setFieldsValue(rest)
+      setSelectedImageFile(null)
     } else {
       form.setFieldsValue(blankValues)
+      setSelectedImageFile(null)
     }
   }, [open, mode, initial, form])
 
@@ -58,6 +75,7 @@ export default function ProductFormModal({ open, mode, initial, onCancel, onSubm
       salePrice: values.salePrice ?? null,
       costPrice: values.costPrice ?? null,
       weight: values.weight ?? null,
+      imageFile: selectedImageFile,
     })
   }
 
@@ -66,6 +84,7 @@ export default function ProductFormModal({ open, mode, initial, onCancel, onSubm
       open={open}
       title={mode === 'edit' ? 'Edit product' : 'Add new product'}
       okText={mode === 'edit' ? 'Save changes' : 'Add product'}
+      confirmLoading={submitting}
       onOk={handleOk}
       onCancel={onCancel}
       width={760}
@@ -101,8 +120,19 @@ export default function ProductFormModal({ open, mode, initial, onCancel, onSubm
             </Form.Item>
           </Col>
           <Col span={24}>
-            <Form.Item name="image" label="Image URL">
-              <Input placeholder="https://..." />
+            <Form.Item name="image" label="Image">
+              <ImageUploader
+                value={form.getFieldValue('image')}
+                autoUpload={false}
+                onFileSelect={(file) => {
+                  setSelectedImageFile(file ?? null)
+                }}
+                onChange={(url) => {
+                  form.setFieldValue('image', url)
+                }}
+                hint="Select image (upload হবে Add Product click এ)"
+                heightClass="h-40"
+              />
             </Form.Item>
           </Col>
           <Col span={12}>

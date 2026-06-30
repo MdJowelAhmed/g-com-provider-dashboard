@@ -218,80 +218,82 @@ export default function BusinessPanel({ onDirty, onSaved }: Props) {
         }
       >
         <div className="space-y-8">
-          <section className="grid gap-5 sm:grid-cols-2">
-            <div className="space-y-2 sm:col-span-2">
-              <label htmlFor="set-biz-name" className={supportLabelClass}>
-                Business name
-              </label>
-              <input
-                id="set-biz-name"
-                value={businessName}
-                onChange={(e) => {
-                  setBusinessName(e.target.value)
-                  markDirty()
-                }}
-                className={supportInputClass}
-                placeholder="Business or venue name"
-                disabled={saving}
-              />
+          <section className="grid gap-5 ">
+            <div className='grid gap-5 grid-cols-1 md:grid-cols-2  lg:grid-cols-3'>
+              <div className=" space-y-2">
+                <label htmlFor="set-biz-name" className={supportLabelClass}>
+                  Business name
+                </label>
+                <input
+                  id="set-biz-name"
+                  value={businessName}
+                  onChange={(e) => {
+                    setBusinessName(e.target.value)
+                    markDirty()
+                  }}
+                  className={supportInputClass}
+                  placeholder="Business or venue name"
+                  disabled={saving}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label htmlFor="set-biz-category" className={supportLabelClass}>
+                  Category
+                </label>
+                <input
+                  id="set-biz-category"
+                  value={category}
+                  readOnly
+                  className={`${supportInputClass} cursor-not-allowed capitalize opacity-70`}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label htmlFor="set-biz-phone" className={supportLabelClass}>
+                  Business phone
+                </label>
+                <input
+                  id="set-biz-phone"
+                  type="tel"
+                  value={businessPhone}
+                  onChange={(e) => {
+                    setBusinessPhone(e.target.value)
+                    markDirty()
+                  }}
+                  className={supportInputClass}
+                  placeholder="+233 24 123 4567"
+                  disabled={saving}
+                />
+              </div>
             </div>
 
-            <div className="space-y-2">
-              <label htmlFor="set-biz-category" className={supportLabelClass}>
-                Category
-              </label>
-              <input
-                id="set-biz-category"
-                value={category}
-                readOnly
-                className={`${supportInputClass} cursor-not-allowed capitalize opacity-70`}
-              />
-            </div>
 
-            <div className="space-y-2">
-              <label htmlFor="set-biz-phone" className={supportLabelClass}>
-                Business phone
-              </label>
-              <input
-                id="set-biz-phone"
-                type="tel"
-                value={businessPhone}
-                onChange={(e) => {
-                  setBusinessPhone(e.target.value)
-                  markDirty()
-                }}
-                className={supportInputClass}
-                placeholder="+233 24 123 4567"
-                disabled={saving}
-              />
-            </div>
-
-            <div className="space-y-2 sm:col-span-2">
-              <label htmlFor="set-biz-desc" className={supportLabelClass}>
-                Description
-              </label>
-              <textarea
-                id="set-biz-desc"
-                value={description}
-                maxLength={500}
-                onChange={(e) => {
-                  setDescription(e.target.value)
-                  markDirty()
-                }}
-                className={supportTextareaClass}
-                placeholder="What customers should know about your business."
-                rows={4}
-                disabled={saving}
-              />
-              <p className="text-right text-[11px] text-gray-600">{description.length} / 500</p>
-            </div>
           </section>
-
+          <div className="space-y-2 sm:col-span-2">
+            <label htmlFor="set-biz-desc" className={supportLabelClass}>
+              Description
+            </label>
+            <textarea
+              id="set-biz-desc"
+              value={description}
+              maxLength={500}
+              onChange={(e) => {
+                setDescription(e.target.value)
+                markDirty()
+              }}
+              className={supportTextareaClass}
+              placeholder="What customers should know about your business."
+              rows={4}
+              disabled={saving}
+            />
+            <p className="text-right text-[11px] text-gray-600">{description.length} / 500</p>
+          </div>
           <section>
             <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">
               Branding
             </h3>
-            <div className="grid gap-5 sm:grid-cols-2">
+            <div className="grid gap-20 sm:grid-cols-2">
               <ImageUploader
                 label="Business logo"
                 required
@@ -301,7 +303,7 @@ export default function BusinessPanel({ onDirty, onSaved }: Props) {
                   markDirty()
                 }}
                 autoUpload
-                heightClass="h-40"
+                heightClass="h-80"
                 hint="Square logo for your listing"
                 disabled={saving}
               />
@@ -314,7 +316,7 @@ export default function BusinessPanel({ onDirty, onSaved }: Props) {
                   markDirty()
                 }}
                 autoUpload
-                heightClass="h-40"
+                heightClass="h-80"
                 hint="Wide banner for your profile"
                 disabled={saving}
               />
@@ -381,11 +383,10 @@ export default function BusinessPanel({ onDirty, onSaved }: Props) {
                         )
                         markDirty()
                       }}
-                      className={`rounded-lg border px-3 py-2 text-xs font-medium transition ${
-                        active
-                          ? 'border-brand bg-brand/15 text-white ring-1 ring-brand/40'
-                          : 'border-surface-border text-gray-400 hover:border-brand/40 hover:text-gray-100'
-                      }`}
+                      className={`rounded-lg border px-3 py-2 text-xs font-medium transition ${active
+                        ? 'border-brand bg-brand/15 text-white ring-1 ring-brand/40'
+                        : 'border-surface-border text-gray-400 hover:border-brand/40 hover:text-gray-100'
+                        }`}
                     >
                       {option.label}
                     </button>
@@ -399,7 +400,7 @@ export default function BusinessPanel({ onDirty, onSaved }: Props) {
             <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">
               Social links
             </h3>
-            <div className="grid gap-5 md:grid-cols-2">
+            <div className="grid gap-5 md:gap-10 lg:gap-20 grid-cols-1 md:grid-cols-2  lg:grid-cols-3">
               <SocialField
                 id="soc-fb"
                 label="Facebook"

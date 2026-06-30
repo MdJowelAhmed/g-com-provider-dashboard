@@ -35,6 +35,7 @@ export const baseApi = createApi({
   'BusinessCategories',
   'HubPosts',
   'Services',
+  'Products',
   'SubCategory',
   'Rooms',
   'Setting',

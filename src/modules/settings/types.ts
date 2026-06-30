@@ -1,10 +1,9 @@
 export type SettingsTabId =
   | 'personal'
   | 'business'
-  | 'security'
   | 'documents'
-  | 'notifications'
-  | 'account'
+  | 'security'
+  // | 'notifications'
 
 export type NotificationPrefs = {
   orders: boolean

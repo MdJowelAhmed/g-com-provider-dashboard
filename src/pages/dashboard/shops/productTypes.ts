@@ -20,6 +20,7 @@ export type Product = {
   hidden: boolean
   featured: boolean
   createdAt: string
+  updatedAt: string
 }
 
 export const PRODUCT_CATEGORIES = [
@@ -62,6 +63,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     hidden: false,
     featured: true,
     createdAt: '2026-03-04T09:10:00.000Z',
+    updatedAt: '2026-03-04T09:10:00.000Z',
   },
   {
     id: 'p_1002',
@@ -84,6 +86,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     hidden: false,
     featured: false,
     createdAt: '2026-02-18T14:40:00.000Z',
+    updatedAt: '2026-02-18T14:40:00.000Z',
   },
   {
     id: 'p_1003',
@@ -106,6 +109,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     hidden: false,
     featured: false,
     createdAt: '2026-01-22T11:05:00.000Z',
+    updatedAt: '2026-01-22T11:05:00.000Z',
   },
   {
     id: 'p_1004',
@@ -128,6 +132,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     hidden: false,
     featured: true,
     createdAt: '2026-03-20T16:22:00.000Z',
+    updatedAt: '2026-03-20T16:22:00.000Z',
   },
   {
     id: 'p_1005',
@@ -150,5 +155,6 @@ export const INITIAL_PRODUCTS: Product[] = [
     hidden: true,
     featured: false,
     createdAt: '2026-04-02T08:30:00.000Z',
+    updatedAt: '2026-04-02T08:30:00.000Z',
   },
 ]

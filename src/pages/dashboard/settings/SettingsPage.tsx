@@ -3,13 +3,10 @@ import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from '../../../context/AuthContext'
 import SettingsHeroHeader from '../../../modules/settings/components/SettingsHeroHeader'
 import SettingsTabList from '../../../modules/settings/components/SettingsTabList'
-import AccountPanel from '../../../modules/settings/components/panels/AccountPanel'
 import BusinessPanel from '../../../modules/settings/components/panels/BusinessPanel'
 import DocumentsPanel from '../../../modules/settings/components/panels/DocumentsPanel'
-import NotificationsPanel from '../../../modules/settings/components/panels/NotificationsPanel'
 import PersonalPanel from '../../../modules/settings/components/panels/PersonalPanel'
 import SecurityPanel from '../../../modules/settings/components/panels/SecurityPanel'
-import { useUnsavedChanges } from '../../../modules/settings/hooks/useUnsavedChanges'
 import type { SettingsTabId } from '../../../modules/settings/types'
 
 function SettingsSkeleton() {
@@ -35,27 +32,18 @@ function SettingsSkeleton() {
 export default function SettingsPage() {
   const { user, updateUser } = useAuth()
   const [tab, setTab] = useState<SettingsTabId>('personal')
-  const [dirty, setDirty] = useState(false)
   const [ready, setReady] = useState(false)
-
-  useUnsavedChanges(dirty)
 
   useEffect(() => {
     const t = window.setTimeout(() => setReady(true), 380)
     return () => window.clearTimeout(t)
   }, [])
 
-  const onDirty = useCallback(() => setDirty(true), [])
-  const onSaved = useCallback(() => setDirty(false), [])
+  const onDirty = useCallback(() => {}, [])
+  const onSaved = useCallback(() => {}, [])
 
   const changeTab = (next: SettingsTabId) => {
     if (next === tab) return
-    if (
-      dirty &&
-      !window.confirm('You have unsaved changes. Switch sections without saving?')
-    ) {
-      return
-    }
     setTab(next)
   }
 
@@ -103,14 +91,13 @@ export default function SettingsPage() {
               <PersonalPanel {...panelProps} />
             ) : tab === 'business' ? (
               <BusinessPanel {...panelProps} />
-            ) : tab === 'security' ? (
-              <SecurityPanel onDirty={onDirty} onSaved={onSaved} />
             ) : tab === 'documents' ? (
               <DocumentsPanel {...panelProps} />
-            ) : tab === 'notifications' ? (
-              <NotificationsPanel {...panelProps} />
+            ) : tab === 'security' ? (
+              <SecurityPanel onDirty={onDirty} onSaved={onSaved} />
+          
             ) : (
-              <AccountPanel {...panelProps} />
+              <PersonalPanel {...panelProps} />
             )}
           </motion.div>
         </AnimatePresence>

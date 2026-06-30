@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Plus,
   Search,
@@ -9,10 +9,20 @@ import {
   Star,
   ImageOff,
 } from 'lucide-react'
-import { Modal } from 'antd'
+import { Modal, message } from 'antd'
+import type { FetchBaseQueryError } from '@reduxjs/toolkit/query'
 import PageHeader from '../../../components/dashboard/PageHeader'
-import ProductFormModal from './ProductFormModal'
+import ProductFormModal, { type ProductSubmitValues } from './ProductFormModal'
 import ReviewsDrawer, { type ReviewEntry } from '../../../components/dashboard/ReviewsDrawer'
+import {
+  useCreateProductMutation,
+  useGetProductsQuery,
+  type ProductApiDoc,
+} from '../../../redux/api/productsApi'
+import {
+  uploadImageFile,
+  useGetPresignedUploadUrlMutation,
+} from '../../../redux/api/imageUploadApi'
 import {
   INITIAL_PRODUCTS,
   PRODUCT_CATEGORIES,
@@ -29,16 +39,55 @@ type ModalState =
 
 const allFilter = '__all__'
 
-function makeId() {
-  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
-    return `p_${crypto.randomUUID().slice(0, 8)}`
-  }
-  return `p_${Date.now().toString(36)}`
-}
-
 function formatPrice(n: number | null | undefined) {
   if (n === null || n === undefined) return '—'
   return `$${n.toFixed(2)}`
+}
+
+function formatDateTime(value: string | null | undefined) {
+  if (!value) return '—'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '—'
+  return date.toLocaleString()
+}
+
+function mapProductFromApi(doc: ProductApiDoc): Product {
+  const normalizedStatus = doc.status === 'archive' ? 'archived' : doc.status
+  return {
+    id: doc._id,
+    image: doc.image ?? '',
+    name: doc.name ?? '',
+    sku: doc.sku ?? '—',
+    description: doc.description ?? '',
+    category: doc.mainCategory ?? 'Other',
+    brand: '',
+    price: doc.price ?? 0,
+    salePrice: null,
+    costPrice: null,
+    stock: 0,
+    lowStockThreshold: 5,
+    weight: null,
+    variants: '',
+    tags: '',
+    status: normalizedStatus === 'active' || normalizedStatus === 'draft' ? normalizedStatus : 'archived',
+    hidden: normalizedStatus === 'archived',
+    featured: false,
+    createdAt: doc.createdAt,
+    updatedAt: doc.updatedAt,
+  }
+}
+
+function getApiErrorMessage(error: unknown, fallback: string) {
+  if (error && typeof error === 'object' && 'data' in error) {
+    const data = (error as FetchBaseQueryError).data
+    if (data && typeof data === 'object') {
+      const payload = data as { message?: unknown; errorMessages?: { message?: string }[] }
+      if (typeof payload.message === 'string' && payload.message.trim()) return payload.message
+      const first = payload.errorMessages?.[0]?.message
+      if (first?.trim()) return first
+    }
+  }
+  return fallback
 }
 
 function stockBadge(p: Product) {
@@ -73,7 +122,15 @@ function statusBadge(status: ProductStatus) {
 }
 
 export default function ProductsPage() {
+  const { data, isLoading, isFetching, isError } = useGetProductsQuery({ page: 1, limit: 100 })
+  const [createProduct, { isLoading: isCreating }] = useCreateProductMutation()
+  const [getPresignedUrl] = useGetPresignedUploadUrlMutation()
   const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS)
+  useEffect(() => {
+    if (!data?.data) return
+    setProducts(data.data.map((doc) => mapProductFromApi(doc)))
+  }, [data?.data])
+
   const [modal, setModal] = useState<ModalState>({ mode: 'closed' })
   const [search, setSearch] = useState('')
   const [categoryFilter, setCategoryFilter] = useState<string>(allFilter)
@@ -134,18 +191,45 @@ export default function ProductsPage() {
     return { total: products.length, active, lowStock, outOfStock, hidden }
   }, [products])
 
-  const handleSubmit = (values: Omit<Product, 'id' | 'createdAt'>) => {
+  const handleSubmit = async (values: ProductSubmitValues) => {
+    const { imageFile, ...rest } = values
     if (modal.mode === 'edit') {
       setProducts((prev) =>
-        prev.map((p) => (p.id === modal.product.id ? { ...p, ...values } : p)),
+        prev.map((p) =>
+          p.id === modal.product.id
+            ? { ...p, ...rest, updatedAt: new Date().toISOString() }
+            : p,
+        ),
       )
+      message.success('Product updated')
     } else if (modal.mode === 'add') {
-      const next: Product = {
-        ...values,
-        id: makeId(),
-        createdAt: new Date().toISOString(),
+      try {
+        let imageUrl = rest.image || ''
+        if (imageFile) {
+          imageUrl = await uploadImageFile(imageFile, async (payload) => {
+            const result = await getPresignedUrl(payload).unwrap()
+            return result
+          })
+        }
+
+        const payload = {
+          name: rest.name,
+          description: rest.description,
+          price: rest.price,
+          deliveryMethod: 'external-delivery',
+          deliveryFee: 0,
+          deliveryTime: 0,
+          image: imageUrl,
+          status: rest.status,
+          sku: rest.sku || undefined,
+        }
+
+        await createProduct(payload).unwrap()
+        message.success('Product created')
+      } catch (error) {
+        message.error(getApiErrorMessage(error, 'Failed to create product'))
+        throw error
       }
-      setProducts((prev) => [next, ...prev])
     }
     setModal({ mode: 'closed' })
   }
@@ -247,13 +331,21 @@ export default function ProductsPage() {
                 <th className="px-4 py-3 font-medium">Rating</th>
                 <th className="px-4 py-3 font-medium">Status</th>
                 <th className="px-4 py-3 font-medium">Visibility</th>
+                <th className="px-4 py-3 font-medium">Created</th>
+                <th className="px-4 py-3 font-medium">Edited</th>
                 <th className="px-4 py-3 text-right font-medium">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.length === 0 ? (
+              {isLoading || isFetching ? (
                 <tr>
-                  <td colSpan={9} className="px-4 py-10 text-center text-gray-500">
+                  <td colSpan={11} className="px-4 py-10 text-center text-gray-500">
+                    Loading products…
+                  </td>
+                </tr>
+              ) : filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={11} className="px-4 py-10 text-center text-gray-500">
                     No products match your filters.
                   </td>
                 </tr>
@@ -342,6 +434,8 @@ export default function ProductsPage() {
                         {p.hidden ? 'Hidden' : 'Visible'}
                       </span>
                     </td>
+                    <td className="px-4 py-3 text-xs text-gray-400">{formatDateTime(p.createdAt)}</td>
+                    <td className="px-4 py-3 text-xs text-gray-400">{formatDateTime(p.updatedAt)}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">
                         <IconButton
@@ -369,10 +463,17 @@ export default function ProductsPage() {
         </div>
       </div>
 
+      {isError ? (
+        <div className="mt-4 rounded-md border border-accent-danger/30 bg-accent-danger/10 px-4 py-3 text-sm text-accent-danger">
+          Failed to load products from API. Showing the current list.
+        </div>
+      ) : null}
+
       <ProductFormModal
         open={modal.mode !== 'closed'}
         mode={modal.mode === 'edit' ? 'edit' : 'add'}
         initial={modal.mode === 'edit' ? modal.product : null}
+        submitting={isCreating}
         onCancel={() => setModal({ mode: 'closed' })}
         onSubmit={handleSubmit}
       />
