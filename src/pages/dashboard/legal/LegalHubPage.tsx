@@ -6,6 +6,10 @@ import PageHeader from '../../../components/dashboard/PageHeader'
 import { LEGAL_DOC_ORDER, LEGAL_DOCUMENTS } from '../../../modules/legal/content/documents'
 import type { LegalDocId } from '../../../modules/legal/types'
 import { hasNavAccess } from '../../../modules/permissions/resolver'
+import {
+  useGetPrivacyPolicyQuery,
+  useGetTermsAndConditionsQuery,
+} from '../../../redux/api/legalApi'
 
 const ICONS: Record<LegalDocId, typeof FileText> = {
   terms: Scale,
@@ -16,6 +20,8 @@ export default function LegalHubPage() {
   const { user } = useAuth()
   const { role } = useParams<{ role: string }>()
   const base = `/dashboard/${role}/legal`
+  const { data: termsData } = useGetTermsAndConditionsQuery()
+  const { data: privacyData } = useGetPrivacyPolicyQuery()
 
   if (!user || !role) return null
 
@@ -34,6 +40,10 @@ export default function LegalHubPage() {
         {LEGAL_DOC_ORDER.map((id, idx) => {
           const doc = LEGAL_DOCUMENTS[id]
           const Icon = ICONS[id]
+          const apiUpdatedAt = id === 'terms' ? termsData?.data?.updatedAt : privacyData?.data?.updatedAt
+          const updatedLabel = apiUpdatedAt
+            ? new Date(apiUpdatedAt).toLocaleDateString()
+            : doc.lastUpdated
           return (
             <motion.div
               key={id}
@@ -56,7 +66,7 @@ export default function LegalHubPage() {
                 </div>
                 <h2 className="mt-4 text-lg font-semibold tracking-tight text-white">{doc.title}</h2>
                 <p className="mt-2 flex-1 text-sm leading-relaxed text-gray-500">{doc.description}</p>
-                <p className="mt-4 text-[11px] text-gray-600">Updated {doc.lastUpdated}</p>
+                <p className="mt-4 text-[11px] text-gray-600">Updated {updatedLabel}</p>
               </Link>
             </motion.div>
           )
