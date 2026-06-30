@@ -1,10 +1,20 @@
+import { message } from 'antd'
 import { motion } from 'framer-motion'
+import { Loader2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import type { User } from '../../../../context/AuthContext'
+import ImageUploader from '../../../../components/common/ImageUploader'
 import {
   supportInputClass,
   supportLabelClass,
 } from '../../../../components/dashboard/support/supportFieldClasses'
+import { mapUserProfileToUser } from '../../../../auth/userProfile'
+import type { User } from '../../../../context/AuthContext'
+import { useAuth } from '../../../../context/AuthContext'
+import { resolveMediaUrl } from '../../../../redux/api/chatApi'
+import {
+  useGetMyProfileQuery,
+  useUpdateMyProfileMutation,
+} from '../../../../redux/api/authApi'
 import SettingsCard from '../SettingsCard'
 import SettingsPrimaryButton from '../SettingsPrimaryButton'
 
@@ -15,37 +25,87 @@ type Props = {
   onSaved: () => void
 }
 
-export default function PersonalPanel({ user, updateUser, onDirty, onSaved }: Props) {
-  const [ownerName, setOwnerName] = useState(user.ownerName)
-  const [email, setEmail] = useState(user.email)
-  const [phone, setPhone] = useState(user.phone)
-  const [saving, setSaving] = useState(false)
+function profileImageDisplayUrl(url: string) {
+  if (!url) return ''
+  if (url.startsWith('http://') || url.startsWith('https://')) return url
+  if (url.startsWith('/')) return resolveMediaUrl(url)
+  return url
+}
+
+function getApiErrorMessage(error: unknown, fallback: string) {
+  if (error && typeof error === 'object' && 'data' in error) {
+    const data = (error as { data?: { message?: string } }).data
+    if (data?.message?.trim()) return data.message
+  }
+  return fallback
+}
+
+export default function PersonalPanel({ onDirty, onSaved }: Props) {
+  const { setUserFromProfile } = useAuth()
+  const { data: profileResponse, isLoading } = useGetMyProfileQuery()
+  const [updateMyProfile, { isLoading: saving }] = useUpdateMyProfileMutation()
+
+  const [ownerName, setOwnerName] = useState('')
+  const [email, setEmail] = useState('')
+  const [phone, setPhone] = useState('')
+  const [address, setAddress] = useState('')
+  const [profileImage, setProfileImage] = useState('')
   const [ok, setOk] = useState(false)
 
-  useEffect(() => {
-    setOwnerName(user.ownerName)
-    setEmail(user.email)
-    setPhone(user.phone)
-  }, [user])
+  const profile = profileResponse?.data
 
-  const save = () => {
-    setSaving(true)
+  useEffect(() => {
+    if (!profile) return
+    setOwnerName(profile.name ?? '')
+    setEmail(profile.email ?? '')
+    setPhone(profile.phone ?? '')
+    setAddress(profile.address ?? '')
+    setProfileImage(profile.profileImage ?? '')
+  }, [profile])
+
+  const save = async () => {
+    if (!ownerName.trim()) {
+      message.warning('Full name is required.')
+      return
+    }
+
     setOk(false)
-    window.setTimeout(() => {
-      updateUser({ ownerName: ownerName.trim(), email: email.trim(), phone: phone.trim() })
-      setSaving(false)
+    try {
+      const result = await updateMyProfile({
+        name: ownerName.trim(),
+        phone: phone.trim(),
+        address: address.trim(),
+        profileImage: profileImage.trim(),
+      }).unwrap()
+
+      if (result.data) {
+        setUserFromProfile(mapUserProfileToUser(result.data))
+      }
+
       onSaved()
       setOk(true)
+      message.success(result.message || 'Personal details saved.')
       window.setTimeout(() => setOk(false), 2800)
-    }, 550)
+    } catch (error) {
+      message.error(getApiErrorMessage(error, 'Failed to update profile.'))
+    }
   }
 
   const change =
     (fn: (v: string) => void) =>
-    (e: React.ChangeEvent<HTMLInputElement>) => {
+    (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
       fn(e.target.value)
       onDirty()
     }
+
+  if (isLoading && !profile) {
+    return (
+      <div className="flex items-center justify-center gap-2 rounded-xl border border-surface-border bg-surface-card px-4 py-16 text-sm text-gray-500">
+        <Loader2 size={18} className="animate-spin" />
+        Loading profile…
+      </div>
+    )
+  }
 
   return (
     <motion.div
@@ -68,9 +128,29 @@ export default function PersonalPanel({ user, updateUser, onDirty, onSaved }: Pr
       <SettingsCard
         title="Personal information"
         description="Your name and contact details shown on receipts and customer communications."
-        footer={<SettingsPrimaryButton onClick={save} loading={saving}>Save changes</SettingsPrimaryButton>}
+        footer={
+          <SettingsPrimaryButton onClick={save} loading={saving}>
+            Save changes
+          </SettingsPrimaryButton>
+        }
       >
         <div className="grid gap-5 sm:grid-cols-2">
+          <div className="space-y-2 sm:col-span-2">
+            <ImageUploader
+              label="Profile photo"
+              value={profileImageDisplayUrl(profileImage)}
+              onChange={(url) => {
+                setProfileImage(url)
+                onDirty()
+              }}
+              autoUpload
+              heightClass="h-40"
+              hint="Upload a clear profile photo"
+              disabled={saving}
+              className="w-40"
+            />
+          </div>
+
           <div className="space-y-2 sm:col-span-2">
             <label htmlFor="set-owner" className={supportLabelClass}>
               Full name
@@ -82,8 +162,10 @@ export default function PersonalPanel({ user, updateUser, onDirty, onSaved }: Pr
               className={supportInputClass}
               placeholder="Your full name"
               autoComplete="name"
+              disabled={saving}
             />
           </div>
+
           <div className="space-y-2">
             <label htmlFor="set-email" className={supportLabelClass}>
               Email
@@ -92,12 +174,13 @@ export default function PersonalPanel({ user, updateUser, onDirty, onSaved }: Pr
               id="set-email"
               type="email"
               value={email}
-              onChange={change(setEmail)}
-              className={supportInputClass}
+              readOnly
+              className={`${supportInputClass} cursor-not-allowed opacity-70`}
               placeholder="you@company.com"
               autoComplete="email"
             />
           </div>
+
           <div className="space-y-2">
             <label htmlFor="set-phone" className={supportLabelClass}>
               Phone
@@ -108,8 +191,25 @@ export default function PersonalPanel({ user, updateUser, onDirty, onSaved }: Pr
               value={phone}
               onChange={change(setPhone)}
               className={supportInputClass}
-              placeholder="+1 555 000 0000"
+              placeholder="+233 24 123 4567"
               autoComplete="tel"
+              disabled={saving}
+            />
+          </div>
+
+          <div className="space-y-2 sm:col-span-2">
+            <label htmlFor="set-address" className={supportLabelClass}>
+              Address
+            </label>
+            <textarea
+              id="set-address"
+              rows={3}
+              value={address}
+              onChange={change(setAddress)}
+              className={`${supportInputClass} resize-y`}
+              placeholder="Your address"
+              autoComplete="street-address"
+              disabled={saving}
             />
           </div>
         </div>

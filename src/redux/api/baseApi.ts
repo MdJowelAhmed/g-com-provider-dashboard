@@ -38,6 +38,7 @@ export const baseApi = createApi({
   'SubCategory',
   'Rooms',
   'Setting',
+  'ProviderOrders',
 ],
   
    

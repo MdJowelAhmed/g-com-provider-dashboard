@@ -1,137 +1,185 @@
 import { useMemo, useState } from 'react'
-import { Search, Eye, Clock, MapPin, Star } from 'lucide-react'
-import PageHeader from '../../../components/dashboard/PageHeader'
-import BookingDrawer from './BookingDrawer'
+import { message } from 'antd'
+import { Eye, Loader2, Search, Star } from 'lucide-react'
+import { useAuth } from '../../../context/AuthContext'
 import {
-  INITIAL_BOOKINGS,
-  BOOKING_STATUS_OPTIONS,
-  PAYMENT_STATUS_OPTIONS,
-  type Booking,
-  type BookingStatus,
-  type PaymentStatus,
-} from './bookingTypes'
+  useBookingCompletedMutation,
+  useBookingDeliveredMutation,
+  useBookingShippedMutation,
+  useGetProviderOrdersQuery,
+} from '../../../redux/api/myBookingApi'
+import { BUSINESS_MAIN_CATEGORIES } from '../../../types/businessCategory'
+import PageHeader from '../../../components/dashboard/PageHeader'
+import CompleteOrderModal from './CompleteOrderModal'
+import DeliverOrderModal from './DeliverOrderModal'
+import ProviderOrderDrawer from './ProviderOrderDrawer'
+import {
+  categoryFromProfile,
+  formatDateTime,
+  formatMoney,
+  mapProviderOrdersFromApi,
+  ORDER_PAYMENT_STATUS_OPTIONS,
+  ORDER_STATUS_OPTIONS,
+  pageCopyForCategory,
+  paymentStatusLabel,
+  statusLabel,
+  type ProviderOrder,
+} from './providerOrderTypes'
 
 const allFilter = '__all__'
 
-const statusToneClass: Record<BookingStatus, string> = {
+const statusTone: Record<string, string> = {
   pending: 'bg-accent-amber/15 text-accent-amber',
+  payment_created: 'bg-blue-500/15 text-blue-400',
+  paid: 'bg-accent-success/15 text-accent-success',
   confirmed: 'bg-blue-500/15 text-blue-400',
-  in_progress: 'bg-brand/20 text-brand-cream',
   completed: 'bg-accent-success/15 text-accent-success',
   cancelled: 'bg-accent-danger/15 text-accent-danger',
-  no_show: 'bg-gray-500/20 text-gray-300',
 }
 
-const paymentToneClass: Record<PaymentStatus, string> = {
-  unpaid: 'bg-accent-danger/15 text-accent-danger',
-  partial: 'bg-accent-amber/15 text-accent-amber',
+const paymentTone: Record<string, string> = {
+  pending: 'bg-accent-amber/15 text-accent-amber',
   paid: 'bg-accent-success/15 text-accent-success',
+  failed: 'bg-accent-danger/15 text-accent-danger',
   refunded: 'bg-gray-500/20 text-gray-300',
 }
 
-function formatDateTime(iso: string) {
-  const d = new Date(iso)
-  return {
-    date: d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }),
-    time: d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }),
-  }
-}
-
-function formatDuration(mins: number) {
-  if (!mins) return '—'
-  const h = Math.floor(mins / 60)
-  const m = mins % 60
-  if (h && m) return `${h}h ${m}m`
-  if (h) return `${h}h`
-  return `${m}m`
-}
-
-function statusLabel(s: BookingStatus) {
-  return BOOKING_STATUS_OPTIONS.find((o) => o.value === s)?.label ?? s
-}
-
-function paymentLabel(s: PaymentStatus) {
-  return PAYMENT_STATUS_OPTIONS.find((o) => o.value === s)?.label ?? s
-}
-
 export default function BookingsPage() {
-  const [bookings, setBookings] = useState<Booking[]>(INITIAL_BOOKINGS)
+  const { user } = useAuth()
+  const category = categoryFromProfile(user?.extra?.category)
+  const copy = pageCopyForCategory(category)
+
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>(allFilter)
   const [paymentFilter, setPaymentFilter] = useState<string>(allFilter)
   const [openId, setOpenId] = useState<string | null>(null)
+  const [deliverOrder, setDeliverOrder] = useState<ProviderOrder | null>(null)
+  const [completeOrder, setCompleteOrder] = useState<ProviderOrder | null>(null)
+  const [actionBusyId, setActionBusyId] = useState<string | null>(null)
+  const [actionBusyType, setActionBusyType] = useState<'ship' | 'deliver' | 'complete' | null>(null)
+
+  const { data, isLoading, isError } = useGetProviderOrdersQuery({
+    page: 1,
+    limit: 50,
+  })
+  const [shipBooking] = useBookingShippedMutation()
+  const [deliverBooking] = useBookingDeliveredMutation()
+  const [completeBooking] = useBookingCompletedMutation()
+
+  const orders = useMemo(
+    () => mapProviderOrdersFromApi(data?.data ?? [], category),
+    [data?.data, category],
+  )
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
-    return bookings
-      .filter((b) => {
-        if (statusFilter !== allFilter && b.status !== statusFilter) return false
-        if (paymentFilter !== allFilter && b.paymentStatus !== paymentFilter) return false
+    return orders
+      .filter((order) => {
+        if (statusFilter !== allFilter && order.status !== statusFilter) return false
+        if (paymentFilter !== allFilter && order.paymentStatus !== paymentFilter) return false
         if (!q) return true
         return (
-          b.code.toLowerCase().includes(q) ||
-          b.customer.name.toLowerCase().includes(q) ||
-          b.customer.phone.toLowerCase().includes(q) ||
-          b.customer.email.toLowerCase().includes(q) ||
-          b.service.name.toLowerCase().includes(q) ||
-          b.location.address.toLowerCase().includes(q) ||
-          b.location.city.toLowerCase().includes(q)
+          order.orderId.toLowerCase().includes(q) ||
+          order.customer.name.toLowerCase().includes(q) ||
+          order.customer.email.toLowerCase().includes(q) ||
+          order.customer.phone.toLowerCase().includes(q) ||
+          order.summaryLabel.toLowerCase().includes(q) ||
+          (order.summaryMeta?.toLowerCase().includes(q) ?? false) ||
+          (order.stayDetails?.roomNumber.toLowerCase().includes(q) ?? false)
         )
       })
-      .sort((a, b) => new Date(b.scheduledAt).getTime() - new Date(a.scheduledAt).getTime())
-  }, [bookings, search, statusFilter, paymentFilter])
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+  }, [orders, search, statusFilter, paymentFilter])
 
   const totals = useMemo(() => {
-    const pending = bookings.filter((b) => b.status === 'pending').length
-    const confirmed = bookings.filter((b) => b.status === 'confirmed').length
-    const inProgress = bookings.filter((b) => b.status === 'in_progress').length
-    const completed = bookings.filter((b) => b.status === 'completed').length
-    const revenue = bookings
-      .filter((b) => b.status === 'completed')
-      .reduce((sum, b) => sum + b.paidAmount, 0)
-    return { total: bookings.length, pending, confirmed, inProgress, completed, revenue }
-  }, [bookings])
+    const pending = orders.filter((order) => order.status === 'pending').length
+    const paid = orders.filter((order) => order.paymentStatus === 'paid').length
+    const completed = orders.filter((order) => order.status === 'completed').length
+    const revenue = orders
+      .filter((order) => order.paymentStatus === 'paid')
+      .reduce((sum, order) => sum + order.providerAmount, 0)
+    return { total: orders.length, pending, paid, completed, revenue }
+  }, [orders])
 
-  const selected = openId ? bookings.find((b) => b.id === openId) ?? null : null
+  const selected = openId ? orders.find((order) => order.id === openId) ?? null : null
 
-  const handleUpdate = (id: string, patch: Partial<Booking>) => {
-    setBookings((prev) => prev.map((b) => (b.id === id ? { ...b, ...patch } : b)))
+  const runAction = async (
+    orderId: string,
+    type: 'ship' | 'deliver' | 'complete',
+    task: () => Promise<{ message?: string }>,
+    onSuccess?: () => void,
+  ) => {
+    if (actionBusyId) return
+    setActionBusyId(orderId)
+    setActionBusyType(type)
+    try {
+      const result = await task()
+      message.success(result.message || `Order ${type} updated`)
+      onSuccess?.()
+    } catch (error) {
+      const text =
+        error && typeof error === 'object' && 'data' in error
+          ? ((error as { data?: { message?: string } }).data?.message ?? `Failed to ${type} order`)
+          : `Failed to ${type} order`
+      message.error(text)
+    } finally {
+      setActionBusyId(null)
+      setActionBusyType(null)
+    }
   }
 
-  const handleDelete = (id: string) => {
-    setBookings((prev) => prev.filter((b) => b.id !== id))
+  const handleShip = (order: ProviderOrder) =>
+    runAction(order.id, 'ship', async () => shipBooking({ id: order.id }).unwrap())
+
+  const handleDeliver = (order: ProviderOrder) => {
+    setDeliverOrder(order)
+  }
+
+  const handleComplete = (order: ProviderOrder) => {
+    setCompleteOrder(order)
+  }
+
+  const submitDeliver = async (deliveryProof: string) => {
+    if (!deliverOrder) return
+    await runAction(
+      deliverOrder.id,
+      'deliver',
+      async () => deliverBooking({ id: deliverOrder.id, deliveryProof }).unwrap(),
+      () => setDeliverOrder(null),
+    )
+  }
+
+  const submitComplete = async (reason: string) => {
+    if (!completeOrder) return
+    await runAction(
+      completeOrder.id,
+      'complete',
+      async () => completeBooking({ id: completeOrder.id, reason }).unwrap(),
+      () => setCompleteOrder(null),
+    )
   }
 
   return (
     <div>
-      <PageHeader
-        title="Bookings"
-        description="Incoming requests from customers — manage schedule, payments, and job status."
-      />
+      <PageHeader title={copy.title} description={copy.description} />
 
-      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
         <SummaryTile label="Total" value={totals.total} tone="neutral" />
         <SummaryTile label="Pending" value={totals.pending} tone="warning" />
-        <SummaryTile label="Confirmed" value={totals.confirmed} tone="info" />
-        <SummaryTile label="In progress" value={totals.inProgress} tone="brand" />
-        <SummaryTile label="Completed" value={totals.completed} tone="success" />
-        <SummaryTile
-          label="Revenue"
-          value={`$${totals.revenue.toFixed(2)}`}
-          tone="success"
-          compact
-        />
+        <SummaryTile label="Paid" value={totals.paid} tone="success" />
+        <SummaryTile label="Completed" value={totals.completed} tone="info" />
+        <SummaryTile label="Revenue" value={formatMoney(totals.revenue)} tone="success" compact />
       </div>
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <div className="relative flex-1 min-w-[240px]">
+        <div className="relative min-w-[240px] flex-1">
           <Search
             size={14}
             className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"
           />
           <input
             type="text"
-            placeholder="Search by code, customer, service, or address"
+            placeholder={copy.searchPlaceholder}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="h-10 w-full rounded-md border border-surface-border bg-surface-card pl-9 pr-3 text-sm text-gray-100 placeholder:text-gray-500 focus:border-brand focus:outline-none"
@@ -143,9 +191,9 @@ export default function BookingsPage() {
           className="h-10 rounded-md border border-surface-border bg-surface-card px-3 text-sm text-gray-100 focus:border-brand focus:outline-none"
         >
           <option value={allFilter}>All statuses</option>
-          {BOOKING_STATUS_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
+          {ORDER_STATUS_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
             </option>
           ))}
         </select>
@@ -155,159 +203,266 @@ export default function BookingsPage() {
           className="h-10 rounded-md border border-surface-border bg-surface-card px-3 text-sm text-gray-100 focus:border-brand focus:outline-none"
         >
           <option value={allFilter}>All payments</option>
-          {PAYMENT_STATUS_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
+          {ORDER_PAYMENT_STATUS_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
             </option>
           ))}
         </select>
       </div>
 
       <div className="overflow-hidden rounded-xl border border-surface-border bg-surface-card">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[1100px] text-sm">
-            <thead>
-              <tr className="border-b border-surface-border bg-surface-elevated text-left text-xs uppercase tracking-wide text-gray-400">
-                <th className="px-4 py-3 font-medium">Booking</th>
-                <th className="px-4 py-3 font-medium">Customer</th>
-                <th className="px-4 py-3 font-medium">Service</th>
-                <th className="px-4 py-3 font-medium">Schedule</th>
-                <th className="px-4 py-3 font-medium">Location</th>
-                <th className="px-4 py-3 text-right font-medium">Amount</th>
-                <th className="px-4 py-3 font-medium">Status</th>
-                <th className="px-4 py-3 font-medium">Payment</th>
-                <th className="px-4 py-3 font-medium">Review</th>
-                <th className="px-4 py-3 text-right font-medium">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.length === 0 ? (
-                <tr>
-                  <td colSpan={10} className="px-4 py-10 text-center text-gray-500">
-                    No bookings match your filters.
-                  </td>
+        {isLoading ? (
+          <div className="flex items-center justify-center gap-2 px-4 py-16 text-sm text-gray-500">
+            <Loader2 size={18} className="animate-spin" />
+            Loading {copy.title.toLowerCase()}…
+          </div>
+        ) : isError ? (
+          <div className="px-4 py-16 text-center text-sm text-accent-danger">
+            Failed to load {copy.title.toLowerCase()}. Please refresh and try again.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[1100px] text-sm">
+              <thead>
+                <tr className="border-b border-surface-border bg-surface-elevated text-left text-xs uppercase tracking-wide text-gray-400">
+                  <th className="px-4 py-3 font-medium">Order</th>
+                  <th className="px-4 py-3 font-medium">Customer</th>
+                  <th className="px-4 py-3 font-medium">{copy.itemColumn}</th>
+                  <th className="px-4 py-3 font-medium">{copy.scheduleColumn}</th>
+                  <th className="px-4 py-3 text-right font-medium">Amount</th>
+                  <th className="px-4 py-3 font-medium">Status</th>
+                  <th className="px-4 py-3 font-medium">Payment</th>
+                  <th className="px-4 py-3 font-medium">Review</th>
+                  <th className="px-4 py-3 text-right font-medium">Actions</th>
                 </tr>
-              ) : (
-                filtered.map((b) => {
-                  const { date, time } = formatDateTime(b.scheduledAt)
-                  return (
-                    <tr
-                      key={b.id}
-                      className="cursor-pointer border-b border-surface-border last:border-b-0 hover:bg-surface-elevated"
-                      onClick={() => setOpenId(b.id)}
-                    >
-                      <td className="px-4 py-3">
-                        <div className="font-mono text-xs text-gray-300">{b.code}</div>
-                        <div className="mt-0.5 text-[11px] text-gray-500">
-                          {b.staffAssigned.length
-                            ? `${b.staffAssigned.length} staff`
-                            : 'Unassigned'}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="font-medium text-gray-100">{b.customer.name}</div>
-                        <div className="text-xs text-gray-500">{b.customer.phone}</div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="text-gray-200">{b.service.name}</div>
-                        <div className="text-xs text-gray-500">{b.service.category}</div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="text-gray-200">{date}</div>
-                        <div className="flex items-center gap-1 text-xs text-gray-500">
-                          <Clock size={11} /> {time} · {formatDuration(b.durationMinutes)}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-start gap-1 text-gray-300">
-                          <MapPin size={12} className="mt-0.5 shrink-0 text-gray-500" />
-                          <div className="min-w-0">
-                            <div
-                              className="max-w-[180px] truncate text-sm"
-                              title={b.location.address}
-                            >
-                              {b.location.address}
-                            </div>
-                            <div className="text-xs text-gray-500">{b.location.city}</div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <div className="font-medium text-gray-100">${b.amount.toFixed(2)}</div>
-                        {b.paidAmount > 0 && b.paidAmount < b.amount ? (
-                          <div className="text-xs text-gray-500">
-                            paid ${b.paidAmount.toFixed(2)}
-                          </div>
-                        ) : null}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span
-                          className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                            statusToneClass[b.status]
-                          }`}
-                        >
-                          {statusLabel(b.status)}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span
-                          className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                            paymentToneClass[b.paymentStatus]
-                          }`}
-                        >
-                          {paymentLabel(b.paymentStatus)}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        {b.review ? (
-                          <span className="inline-flex items-center gap-1 text-gray-200">
-                            <Star
-                              size={13}
-                              className="fill-accent-amber text-accent-amber"
-                            />
-                            <span className="text-sm font-medium">
-                              {b.review.rating.toFixed(1)}
-                            </span>
-                          </span>
-                        ) : b.status === 'completed' ? (
-                          <span className="text-xs text-gray-500">Awaiting</span>
-                        ) : (
-                          <span className="text-gray-600">—</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center justify-end">
-                          <button
-                            type="button"
-                            title="View details"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              setOpenId(b.id)
-                            }}
-                            className="flex h-8 w-8 items-center justify-center rounded-md border border-transparent text-gray-300 hover:border-surface-border hover:bg-surface-card hover:text-white"
-                          >
-                            <Eye size={15} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {filtered.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} className="px-4 py-10 text-center text-gray-500">
+                      {copy.emptyLabel}
+                    </td>
+                  </tr>
+                ) : (
+                  filtered.map((order) => (
+                    <OrderRow
+                      key={order.id}
+                      order={order}
+                      category={category}
+                      onOpen={() => setOpenId(order.id)}
+                      onShip={handleShip}
+                      onDeliver={handleDeliver}
+                      onComplete={handleComplete}
+                      busyId={actionBusyId}
+                      busyType={actionBusyType}
+                    />
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
-      <BookingDrawer
+      <ProviderOrderDrawer
         open={openId !== null}
-        booking={selected}
+        order={selected}
         onClose={() => setOpenId(null)}
-        onUpdate={handleUpdate}
-        onDelete={handleDelete}
+        onShip={selected ? () => handleShip(selected) : undefined}
+        onDeliver={selected ? () => handleDeliver(selected) : undefined}
+        onComplete={selected ? () => handleComplete(selected) : undefined}
+        busy={selected ? actionBusyId === selected.id : false}
+        busyType={actionBusyType}
+      />
+
+      <DeliverOrderModal
+        open={deliverOrder !== null}
+        order={deliverOrder}
+        submitting={deliverOrder ? actionBusyId === deliverOrder.id && actionBusyType === 'deliver' : false}
+        onClose={() => setDeliverOrder(null)}
+        onSubmit={submitDeliver}
+      />
+
+      <CompleteOrderModal
+        open={completeOrder !== null}
+        order={completeOrder}
+        submitting={completeOrder ? actionBusyId === completeOrder.id && actionBusyType === 'complete' : false}
+        onClose={() => setCompleteOrder(null)}
+        onSubmit={submitComplete}
       />
     </div>
   )
+}
+
+function OrderRow({
+  order,
+  category,
+  onOpen,
+  onShip,
+  onDeliver,
+  onComplete,
+  busyId,
+  busyType,
+}: {
+  order: ProviderOrder
+  category: ReturnType<typeof categoryFromProfile>
+  onOpen: () => void
+  onShip: (order: ProviderOrder) => void
+  onDeliver: (order: ProviderOrder) => void
+  onComplete: (order: ProviderOrder) => void
+  busyId: string | null
+  busyType: 'ship' | 'deliver' | 'complete' | null
+}) {
+  const scheduleText = getScheduleText(order, category)
+  const isBusy = busyId === order.id
+  const canShipDeliver =
+    category === BUSINESS_MAIN_CATEGORIES.SHOP || category === BUSINESS_MAIN_CATEGORIES.DINE
+  const canComplete = category === BUSINESS_MAIN_CATEGORIES.SERVICES
+
+  return (
+    <tr
+      className="cursor-pointer border-b border-surface-border last:border-b-0 hover:bg-surface-elevated"
+      onClick={onOpen}
+    >
+      <td className="px-4 py-3">
+        <div className="font-mono text-xs text-gray-300">{order.orderId}</div>
+        <div className="mt-0.5 text-[11px] capitalize text-gray-500">{order.orderType}</div>
+      </td>
+      <td className="px-4 py-3">
+        <div className="font-medium text-gray-100">{order.customer.name}</div>
+        <div className="text-xs text-gray-500">{order.customer.email}</div>
+      </td>
+      <td className="px-4 py-3">
+        <div className="text-gray-200">{order.summaryLabel}</div>
+        {order.stayDetails ? (
+          <div className="text-xs text-gray-500">Room #{order.stayDetails.roomNumber}</div>
+        ) : order.productLines.length > 1 ? (
+          <div className="text-xs text-gray-500">{order.productLines.length} items</div>
+        ) : null}
+      </td>
+      <td className="px-4 py-3">
+        <div className="text-gray-200">{scheduleText}</div>
+        {order.summaryMeta ? (
+          <div className="text-xs text-gray-500">{order.summaryMeta}</div>
+        ) : null}
+      </td>
+      <td className="px-4 py-3 text-right">
+        <div className="font-medium text-gray-100">{formatMoney(order.totalAmount)}</div>
+        {order.providerAmount > 0 ? (
+          <div className="text-xs text-gray-500">you get {formatMoney(order.providerAmount)}</div>
+        ) : null}
+      </td>
+      <td className="px-4 py-3">
+        <span
+          className={`rounded-full px-2 py-0.5 text-xs font-medium capitalize ${
+            statusTone[order.status] ?? 'bg-gray-500/20 text-gray-300'
+          }`}
+        >
+          {statusLabel(order.status)}
+        </span>
+      </td>
+      <td className="px-4 py-3">
+        <span
+          className={`rounded-full px-2 py-0.5 text-xs font-medium capitalize ${
+            paymentTone[order.paymentStatus] ?? 'bg-gray-500/20 text-gray-300'
+          }`}
+        >
+          {paymentStatusLabel(order.paymentStatus)}
+        </span>
+      </td>
+      <td className="px-4 py-3">
+        {order.review ? (
+          <span className="inline-flex items-center gap-1 text-gray-200">
+            <Star size={13} className="fill-accent-amber text-accent-amber" />
+            <span className="text-sm font-medium">{order.review.rating.toFixed(1)}</span>
+          </span>
+        ) : order.hasReview ? (
+          <span className="text-xs text-gray-500">Reviewed</span>
+        ) : order.status === 'completed' || order.paymentStatus === 'paid' ? (
+          <span className="text-xs text-gray-500">Awaiting</span>
+        ) : (
+          <span className="text-gray-600">—</span>
+        )}
+      </td>
+      <td className="px-4 py-3">
+        <div className="flex items-center justify-end gap-2">
+          {canShipDeliver ? (
+            <>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onShip(order)
+                }}
+                disabled={isBusy}
+                className="rounded-md border border-surface-border px-2 py-1 text-xs text-gray-200 hover:bg-surface-elevated disabled:opacity-60"
+              >
+                {isBusy && busyType === 'ship' ? 'Shipping...' : 'Ship'}
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onDeliver(order)
+                }}
+                disabled={isBusy}
+                className="rounded-md border border-surface-border px-2 py-1 text-xs text-gray-200 hover:bg-surface-elevated disabled:opacity-60"
+              >
+                {isBusy && busyType === 'deliver' ? 'Delivering...' : 'Deliver'}
+              </button>
+            </>
+          ) : null}
+          {canComplete ? (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                onComplete(order)
+              }}
+              disabled={isBusy}
+              className="rounded-md border border-surface-border px-2 py-1 text-xs text-gray-200 hover:bg-surface-elevated disabled:opacity-60"
+            >
+              {isBusy && busyType === 'complete' ? 'Completing...' : 'Complete'}
+            </button>
+          ) : null}
+          <button
+            type="button"
+            title="View details"
+            onClick={(e) => {
+              e.stopPropagation()
+              onOpen()
+            }}
+            className="flex h-8 w-8 items-center justify-center rounded-md border border-transparent text-gray-300 hover:border-surface-border hover:bg-surface-card hover:text-white"
+          >
+            <Eye size={15} />
+          </button>
+        </div>
+      </td>
+    </tr>
+  )
+}
+
+function getScheduleText(
+  order: ProviderOrder,
+  category: ReturnType<typeof categoryFromProfile>,
+) {
+  if (category === BUSINESS_MAIN_CATEGORIES.STAY && order.stayDetails) {
+    return `${formatDateTime(order.stayDetails.checkIn).split(',')[0]} → ${formatDateTime(order.stayDetails.checkOut).split(',')[0]}`
+  }
+  if (
+    (category === BUSINESS_MAIN_CATEGORIES.SHOP || category === BUSINESS_MAIN_CATEGORIES.DINE) &&
+    order.fulfillment
+  ) {
+    return order.fulfillment.method
+  }
+  if (category === BUSINESS_MAIN_CATEGORIES.SERVICES && order.serviceDetails?.startTime) {
+    return formatDateTime(order.serviceDetails.startTime)
+  }
+  if (category === BUSINESS_MAIN_CATEGORIES.EVENT && order.eventDetails?.eventDate) {
+    return formatDateTime(order.eventDetails.eventDate)
+  }
+  return formatDateTime(order.createdAt)
 }
 
 function SummaryTile({

@@ -7,7 +7,6 @@ import { ROLE_MOCK } from '../../data/mockData'
 import PageHeader from '../../components/dashboard/PageHeader'
 import DataTable from '../../components/dashboard/DataTable'
 import ProductsPage from './shops/ProductsPage'
-import OrdersPage from './shops/OrdersPage'
 import CustomersPage from './shops/CustomersPage'
 import ShopManagementPage from './shops/ShopManagementPage'
 import BusinessCategoriesPage from './business-categories/BusinessCategoriesPage'
@@ -15,10 +14,8 @@ import ServicesPage from './services/ServicesPage'
 import BookingsPage from './services/BookingsPage'
 import ServiceCustomersPage from './services/CustomersPage'
 import RoomsPage from './stay/RoomsPage'
-import StayBookingsPage from './stay/StayBookingsPage'
 import GuestsPage from './stay/GuestsPage'
 import MenuPage from './dine/MenuPage'
-import DineOrdersPage from './dine/OrdersPage'
 import EventsPage from './events/EventsPage'
 import TicketsPage from './events/TicketsPage'
 import AttendeesPage from './events/AttendeesPage'
@@ -89,7 +86,7 @@ export default function ListPage() {
   }
 
   if (dashboardRole === 'stay' && tab === 'reservations') {
-    return <StayBookingsPage />
+    return <BookingsPage />
   }
 
   if (dashboardRole === 'stay' && tab === 'guests') {
@@ -101,7 +98,7 @@ export default function ListPage() {
   }
 
   if (dashboardRole === 'dine' && tab === 'orders') {
-    return <DineOrdersPage />
+    return <BookingsPage />
   }
 
   if (dashboardRole === 'events' && tab === 'events') {
@@ -121,7 +118,7 @@ export default function ListPage() {
   }
 
   if (dashboardRole === 'shops' && tab === 'orders') {
-    return <OrdersPage />
+    return <BookingsPage />
   }
 
   if (dashboardRole === 'shops' && tab === 'customers') {
