@@ -14,6 +14,13 @@ import {
 } from 'recharts'
 import {
   ArrowUpRight,
+  ClipboardList,
+  DollarSign,
+  Loader2,
+  MessageSquare,
+  Package,
+  ShoppingBag,
+  Star,
   TrendingDown,
   TrendingUp,
   Wallet,
@@ -24,11 +31,17 @@ import { ROLE_META } from '../../config/roleConfig'
 import { hasNavAccess, hasPermission } from '../../modules/permissions/resolver'
 import { navItemToPermissionId } from '../../modules/permissions/navPermissionMap'
 import { OVERVIEW_UI } from '../../config/overviewUiConfig'
-import { ROLE_MOCK } from '../../data/mockData'
 import { OVERVIEW_DATA } from '../../data/overviewData'
 import type { Role } from '../../types/role'
 import PageHeader from '../../components/dashboard/PageHeader'
 import StatCard from '../../components/dashboard/StatCard'
+import {
+  useGetDashboardStatsQuery,
+  useGetMonthlyRevenueQuery,
+  useGetPeriodSummaryQuery,
+  useGetRecentOrdersQuery,
+  type RecentOrder,
+} from '../../redux/api/dashboardApi'
 
 type RangeKey = '7d' | '30d' | '90d'
 
@@ -42,6 +55,18 @@ const RANGE_LABEL: Record<RangeKey, string> = {
   '7d': 'Last 7 days',
   '30d': 'Last 30 days',
   '90d': 'Last 90 days',
+}
+
+const STATUS_COLORS: Record<string, string> = {
+  completed: '#22c55e',
+  paid: '#22c55e',
+  confirmed: '#3b82f6',
+  payment_created: '#3b82f6',
+  pending: '#d9a441',
+  in_progress: '#d9a441',
+  cancelled: '#ef4444',
+  failed: '#ef4444',
+  refunded: '#9ca3af',
 }
 
 function formatMoney(n: number) {
@@ -65,14 +90,114 @@ function shortDate(iso: string) {
   })
 }
 
+function statusLabel(status: string) {
+  return status.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
+function statusColor(status: string) {
+  return STATUS_COLORS[status] ?? '#6b7280'
+}
+
+function buildStatusBreakdown(orders: RecentOrder[]) {
+  const counts = new Map<string, number>()
+  for (const order of orders) {
+    counts.set(order.status, (counts.get(order.status) ?? 0) + 1)
+  }
+  return [...counts.entries()].map(([status, value]) => ({
+    label: statusLabel(status),
+    status,
+    value,
+    color: statusColor(status),
+  }))
+}
+
 export default function Overview() {
   const { user } = useAuth()
   const dashboardRole = useDashboardRole()
   const [range, setRange] = useState<RangeKey>('30d')
+  const year = new Date().getFullYear()
+
+  const {
+    data: statsRes,
+    isLoading: statsLoading,
+    isError: statsError,
+  } = useGetDashboardStatsQuery(undefined, { skip: !user })
+  const {
+    data: revenueRes,
+    isLoading: revenueLoading,
+    isError: revenueError,
+  } = useGetMonthlyRevenueQuery({ year }, { skip: !user })
+  const {
+    data: periodRes,
+    isLoading: periodLoading,
+    isError: periodError,
+  } = useGetPeriodSummaryQuery({ range: RANGE_DAYS[range] }, { skip: !user })
+  const {
+    data: recentRes,
+    isLoading: recentLoading,
+    isError: recentError,
+  } = useGetRecentOrdersQuery(undefined, { skip: !user })
+
+  const ui = OVERVIEW_UI[dashboardRole]
+  const meta = ROLE_META[dashboardRole]
+  const RoleIcon = meta.icon
+
+  const stats = statsRes?.data
+  const period = periodRes?.data
+  const monthlyRevenue = revenueRes?.data?.data ?? []
+  const recentOrders = recentRes?.data ?? []
+
+  const chartData = useMemo(
+    () =>
+      monthlyRevenue.map((point) => ({
+        month: point.monthName,
+        revenue: point.revenue,
+      })),
+    [monthlyRevenue],
+  )
+
+  const yearRevenue = useMemo(
+    () => monthlyRevenue.reduce((sum, point) => sum + point.revenue, 0),
+    [monthlyRevenue],
+  )
+
+  const statusBreakdown = useMemo(
+    () => buildStatusBreakdown(recentOrders),
+    [recentOrders],
+  )
+  const totalStatus = statusBreakdown.reduce((sum, slice) => sum + slice.value, 0)
+
+  const avgOrderValue = stats
+    ? stats.totalRevenueAmount / Math.max(stats.totalOrders, 1)
+    : 0
+
+  const isLoading = statsLoading || revenueLoading || periodLoading || recentLoading
+  const isError = statsError || revenueError || periodError || recentError
+
+  const statCards = [
+    {
+      label: ui.primaryMetricLabel,
+      value: formatMoney(stats?.totalRevenueAmount ?? 0),
+      icon: DollarSign,
+    },
+    {
+      label: ui.secondaryMetricLabel,
+      value: formatNum(stats?.totalOrders ?? 0),
+      icon: ShoppingBag,
+    },
+    {
+      label: 'Total sales',
+      value: formatMoney(stats?.totalSalesAmount ?? 0),
+      icon: ClipboardList,
+    },
+    {
+      label: 'Products',
+      value: formatNum(stats?.totalProducts ?? 0),
+      icon: Package,
+    },
+  ]
 
   if (!user) return null
-
-  const meta = ROLE_META[dashboardRole]
 
   if (!hasNavAccess(user, '')) {
     const fallback = meta.navItems.find((item) => hasPermission(user, navItemToPermissionId(item)))
@@ -81,45 +206,12 @@ export default function Overview() {
     }
   }
 
-  const ui = OVERVIEW_UI[dashboardRole]
-  const mock = ROLE_MOCK[dashboardRole]
-  const overview = OVERVIEW_DATA[dashboardRole]
-  const RoleIcon = meta.icon
-
-  const rangedTrend = useMemo(
-    () => overview.trend.slice(-RANGE_DAYS[range]),
-    [overview.trend, range],
-  )
-
-  const periodTotals = useMemo(() => {
-    const prev = overview.trend.slice(
-      -RANGE_DAYS[range] * 2,
-      -RANGE_DAYS[range],
-    )
-    const revenue = rangedTrend.reduce((s, p) => s + p.revenue, 0)
-    const orders = rangedTrend.reduce((s, p) => s + p.orders, 0)
-    const prevRevenue = prev.reduce((s, p) => s + p.revenue, 0) || 1
-    const prevOrders = prev.reduce((s, p) => s + p.orders, 0) || 1
-    const revenueDelta = ((revenue - prevRevenue) / prevRevenue) * 100
-    const orderDelta = ((orders - prevOrders) / prevOrders) * 100
-    const aov = orders ? revenue / orders : 0
-    return {
-      revenue,
-      orders,
-      revenueDelta,
-      orderDelta,
-      aov,
-    }
-  }, [rangedTrend, overview.trend, range])
-
-  const totalStatus = overview.statusBreakdown.reduce((s, x) => s + x.value, 0)
-
   return (
     <div>
       <PageHeader
         title={`Welcome, ${user.businessName || user.ownerName}`}
         description={ui.subtitle}
-        actions={<RangeToggle value={range} onChange={setRange} />}
+        // actions={<RangeToggle value={range} onChange={setRange} />}
       />
 
       {!user.stripeConnected && (
@@ -142,205 +234,273 @@ export default function Overview() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {mock.stats.map((s) => (
-          <StatCard
-            key={s.label}
-            label={s.label}
-            value={s.value}
-            delta={s.delta}
-            trend={s.trend}
-            icon={s.icon}
-          />
-        ))}
-      </div>
-
-      <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <div className="rounded-xl border border-surface-border bg-surface-card p-5 lg:col-span-2">
-          <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <div className="text-sm font-semibold text-gray-100">{ui.chartTitle}</div>
-              <div className="text-xs text-gray-400">{RANGE_LABEL[range]}</div>
-            </div>
-            <div className="flex items-center gap-4 text-sm">
-              <Metric
-                label={ui.primaryMetricLabel}
-                value={formatMoney(periodTotals.revenue)}
-                delta={periodTotals.revenueDelta}
-              />
-              <Metric
-                label={ui.secondaryMetricLabel}
-                value={formatNum(periodTotals.orders)}
-                delta={periodTotals.orderDelta}
-              />
-              <Metric label={ui.tertiaryMetricLabel} value={formatMoney(periodTotals.aov)} />
-            </div>
-          </div>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart
-                data={rangedTrend}
-                margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
-              >
-                <defs>
-                  <linearGradient id="gradRevenue" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#a0522d" stopOpacity={0.55} />
-                    <stop offset="100%" stopColor="#a0522d" stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="gradOrders" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#d9a441" stopOpacity={0.4} />
-                    <stop offset="100%" stopColor="#d9a441" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid stroke="#2e2e34" vertical={false} />
-                <XAxis
-                  dataKey="date"
-                  tick={{ fill: '#6b7280', fontSize: 11 }}
-                  tickLine={false}
-                  axisLine={{ stroke: '#2e2e34' }}
-                  tickFormatter={(v: string) => shortDate(v)}
-                  minTickGap={24}
-                />
-                <YAxis
-                  yAxisId="left"
-                  tick={{ fill: '#6b7280', fontSize: 11 }}
-                  tickLine={false}
-                  axisLine={false}
-                  tickFormatter={(v: number) => formatMoney(v)}
-                />
-                <YAxis
-                  yAxisId="right"
-                  orientation="right"
-                  tick={{ fill: '#6b7280', fontSize: 11 }}
-                  tickLine={false}
-                  axisLine={false}
-                />
-                <Tooltip
-                  contentStyle={{
-                    background: '#19191b',
-                    border: '1px solid #2e2e34',
-                    borderRadius: 8,
-                    fontSize: 12,
-                  }}
-                  labelStyle={{ color: '#9ca3af' }}
-                  itemStyle={{ color: '#e5e7eb' }}
-                  labelFormatter={(v) => shortDate(String(v))}
-                  formatter={(value, name) =>
-                    name === 'revenue'
-                      ? [formatMoney(Number(value)), ui.revenueSeriesName]
-                      : [formatNum(Number(value)), ui.volumeSeriesName]
-                  }
-                />
-                <Area
-                  yAxisId="left"
-                  type="monotone"
-                  dataKey="revenue"
-                  stroke="#a0522d"
-                  strokeWidth={2}
-                  fill="url(#gradRevenue)"
-                />
-                <Area
-                  yAxisId="right"
-                  type="monotone"
-                  dataKey="orders"
-                  stroke="#d9a441"
-                  strokeWidth={2}
-                  fill="url(#gradOrders)"
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
+      {isError && (
+        <div className="mb-6 rounded-xl border border-accent-danger/40 bg-accent-danger/10 px-4 py-3 text-sm text-accent-danger">
+          Could not load dashboard analytics. Please try again.
         </div>
+      )}
 
-        <PayoutCard role={dashboardRole} />
-      </div>
-
-      <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <div className="rounded-xl border border-surface-border bg-surface-card p-5">
-          <div className="mb-1 text-sm font-semibold text-gray-100">Status breakdown</div>
-          <div className="mb-3 text-xs text-gray-400">
-            {totalStatus} {ui.statusRecordsHint} this period
-          </div>
-          <div className="flex items-center gap-4">
-            <div className="h-40 w-40 shrink-0">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={overview.statusBreakdown}
-                    dataKey="value"
-                    nameKey="label"
-                    innerRadius={48}
-                    outerRadius={72}
-                    paddingAngle={2}
-                    stroke="none"
-                  >
-                    {overview.statusBreakdown.map((s) => (
-                      <Cell key={s.label} fill={s.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    contentStyle={{
-                      background: '#19191b',
-                      border: '1px solid #2e2e34',
-                      borderRadius: 8,
-                      fontSize: 12,
-                    }}
-                    itemStyle={{ color: '#e5e7eb' }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="flex-1 space-y-2 text-sm">
-              {overview.statusBreakdown.map((s) => {
-                const pct = totalStatus ? Math.round((s.value / totalStatus) * 100) : 0
-                return (
-                  <div key={s.label} className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2">
-                      <span
-                        className="inline-block h-2 w-2 rounded-full"
-                        style={{ background: s.color }}
-                      />
-                      <span className="text-gray-300">{s.label}</span>
-                    </div>
-                    <div className="text-xs text-gray-400">
-                      {s.value} · {pct}%
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
+      {isLoading ? (
+        <div className="flex min-h-[40vh] items-center justify-center text-gray-400">
+          <Loader2 className="animate-spin" size={28} />
         </div>
-
-        <div className="rounded-xl border border-surface-border bg-surface-card p-5">
-          <div className="mb-1 text-sm font-semibold text-gray-100">{ui.topPerformersTitle}</div>
-          <div className="mb-4 text-xs text-gray-400">{ui.topPerformersHint}</div>
-          <ul className="space-y-3 text-sm">
-            {overview.topItems.map((it, idx) => (
-              <li key={it.name} className="flex items-center gap-3">
-                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-elevated text-xs font-semibold text-gray-300">
-                  {idx + 1}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="truncate font-medium text-gray-100">{it.name}</div>
-                  <div className="text-xs text-gray-500">
-                    {formatNum(it.units)} {ui.topUnitLabel}
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div className="font-medium text-gray-100">{formatMoney(it.revenue)}</div>
-                  <div
-                    className={`text-xs ${it.change >= 0 ? 'text-accent-success' : 'text-accent-danger'}`}
-                  >
-                    {it.change >= 0 ? '+' : ''}
-                    {it.change}%
-                  </div>
-                </div>
-              </li>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            {statCards.map((card) => (
+              <StatCard key={card.label} label={card.label} value={card.value} icon={card.icon} />
             ))}
-          </ul>
-        </div>
-      </div>
+          </div>
+
+          <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
+            <div className="rounded-xl border border-surface-border bg-surface-card p-5 lg:col-span-2">
+              <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <div className="text-sm font-semibold text-gray-100">{ui.chartTitle}</div>
+                  <div className="text-xs text-gray-400">{year} monthly revenue</div>
+                </div>
+                <div className="flex items-center gap-4 text-sm">
+                  <Metric label={ui.primaryMetricLabel} value={formatMoney(yearRevenue)} />
+                  <Metric
+                    label="Completed"
+                    value={formatNum(period?.completedOrders ?? 0)}
+                  />
+                  <Metric
+                    label={ui.tertiaryMetricLabel}
+                    value={formatMoney(avgOrderValue)}
+                  />
+                </div>
+              </div>
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart
+                    data={chartData}
+                    margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
+                  >
+                    <defs>
+                      <linearGradient id="gradRevenue" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#a0522d" stopOpacity={0.55} />
+                        <stop offset="100%" stopColor="#a0522d" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid stroke="#2e2e34" vertical={false} />
+                    <XAxis
+                      dataKey="month"
+                      tick={{ fill: '#6b7280', fontSize: 11 }}
+                      tickLine={false}
+                      axisLine={{ stroke: '#2e2e34' }}
+                    />
+                    <YAxis
+                      tick={{ fill: '#6b7280', fontSize: 11 }}
+                      tickLine={false}
+                      axisLine={false}
+                      tickFormatter={(v: number) => formatMoney(v)}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        background: '#19191b',
+                        border: '1px solid #2e2e34',
+                        borderRadius: 8,
+                        fontSize: 12,
+                      }}
+                      labelStyle={{ color: '#9ca3af' }}
+                      itemStyle={{ color: '#e5e7eb' }}
+                      formatter={(value) => [
+                        formatMoney(Number(value)),
+                        ui.revenueSeriesName,
+                      ]}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="revenue"
+                      stroke="#a0522d"
+                      strokeWidth={2}
+                      fill="url(#gradRevenue)"
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-surface-border bg-surface-card p-5">
+              <div className="mb-1 text-sm font-semibold text-gray-100">Status breakdown</div>
+              <div className="mb-3 text-xs text-gray-400">
+                {totalStatus} {ui.statusRecordsHint}
+              </div>
+              {statusBreakdown.length === 0 ? (
+                <div className="py-10 text-center text-sm text-gray-500">No recent orders</div>
+              ) : (
+                <div className="flex items-center gap-4">
+                  <div className="h-40 w-40 shrink-0">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={statusBreakdown}
+                          dataKey="value"
+                          nameKey="label"
+                          innerRadius={48}
+                          outerRadius={72}
+                          paddingAngle={2}
+                          stroke="none"
+                        >
+                          {statusBreakdown.map((slice) => (
+                            <Cell key={slice.status} fill={slice.color} />
+                          ))}
+                        </Pie>
+                        <Tooltip
+                          contentStyle={{
+                            background: '#19191b',
+                            border: '1px solid #2e2e34',
+                            borderRadius: 8,
+                            fontSize: 12,
+                          }}
+                          itemStyle={{ color: '#e5e7eb' }}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div className="flex-1 space-y-2 text-sm">
+                    {statusBreakdown.map((slice) => {
+                      const pct = totalStatus
+                        ? Math.round((slice.value / totalStatus) * 100)
+                        : 0
+                      return (
+                        <div
+                          key={slice.status}
+                          className="flex items-center justify-between gap-3"
+                        >
+                          <div className="flex items-center gap-2">
+                            <span
+                              className="inline-block h-2 w-2 rounded-full"
+                              style={{ background: slice.color }}
+                            />
+                            <span className="text-gray-300">{slice.label}</span>
+                          </div>
+                          <div className="text-xs text-gray-400">
+                            {slice.value} · {pct}%
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+            {/* <PayoutCard role={dashboardRole} /> */}
+          </div>
+
+          <div className="mt-6">
+            {/* <PeriodSummaryCard period={period} rangeLabel={RANGE_LABEL[range]} /> */}
+
+            
+
+            <div className="rounded-xl border border-surface-border bg-surface-card p-5">
+              <div className="mb-1 text-sm font-semibold text-gray-100">Recent orders</div>
+              <div className="mb-4 text-xs text-gray-400">Latest customer activity</div>
+              {recentOrders.length === 0 ? (
+                <div className="py-10 text-center text-sm text-gray-500">No recent orders</div>
+              ) : (
+                <ul className="space-y-3 text-sm">
+                  {recentOrders.map((order) => (
+                    <li key={order._id} className="flex items-center gap-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate font-medium text-gray-100">
+                          {order.orderId}
+                        </div>
+                        <div className="truncate text-xs text-gray-500">
+                          {order.customer?.name ?? 'Customer'} · {shortDate(order.createdAt)}
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-xs font-medium text-gray-200">
+                          {statusLabel(order.status)}
+                        </div>
+                        {order.paymentStatus && (
+                          <div className="text-xs text-gray-500">
+                            {statusLabel(order.paymentStatus)}
+                          </div>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+function PeriodSummaryCard({
+  period,
+  rangeLabel,
+}: {
+  period:
+    | {
+        completedOrders: number
+        totalProducts: number
+        newMessages: number
+        averageRating: number
+        totalReviews: number
+      }
+    | undefined
+  rangeLabel: string
+}) {
+  const items = [
+    {
+      label: 'Completed orders',
+      value: formatNum(period?.completedOrders ?? 0),
+      icon: ShoppingBag,
+    },
+    {
+      label: 'Products sold',
+      value: formatNum(period?.totalProducts ?? 0),
+      icon: Package,
+    },
+    {
+      label: 'New messages',
+      value: formatNum(period?.newMessages ?? 0),
+      icon: MessageSquare,
+    },
+    {
+      label: 'Avg. rating',
+      value:
+        period && period.totalReviews > 0
+          ? period.averageRating.toFixed(1)
+          : '—',
+      icon: Star,
+      hint:
+        period && period.totalReviews > 0
+          ? `${formatNum(period.totalReviews)} reviews`
+          : 'No reviews yet',
+    },
+  ]
+
+  return (
+    <div className="rounded-xl border border-surface-border bg-surface-card p-5">
+      <div className="mb-1 text-sm font-semibold text-gray-100">Period summary</div>
+      <div className="mb-4 text-xs text-gray-400">{rangeLabel}</div>
+      <ul className="space-y-3 text-sm">
+        {items.map((item) => {
+          const Icon = item.icon
+          return (
+            <li key={item.label} className="flex items-center gap-3">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-surface-elevated text-brand">
+                <Icon size={14} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-gray-300">{item.label}</div>
+                {'hint' in item && item.hint && (
+                  <div className="text-xs text-gray-500">{item.hint}</div>
+                )}
+              </div>
+              <div className="font-medium text-gray-100">{item.value}</div>
+            </li>
+          )
+        })}
+      </ul>
     </div>
   )
 }
@@ -451,4 +611,3 @@ function PayoutCard({ role }: { role: Role }) {
     </div>
   )
 }
-

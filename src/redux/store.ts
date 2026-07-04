@@ -8,6 +8,7 @@ import './api/hubPostApi'
 import './api/serviceApi'
 import './api/roomApi'
 import './api/myBookingApi'
+import './api/dashboardApi'
 import authReducer from './slice/authSlice'
 
 export const store = configureStore({

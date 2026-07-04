@@ -40,6 +40,7 @@ export const baseApi = createApi({
   'Rooms',
   'Setting',
   'ProviderOrders',
+  'DashboardStats',
 ],
   
    
