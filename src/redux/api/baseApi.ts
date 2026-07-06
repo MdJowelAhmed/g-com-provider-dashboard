@@ -5,7 +5,22 @@ export const baseApi = createApi({
     reducerPath: 'baseApi',
     baseQuery: fetchBaseQuery({
         baseUrl: import.meta.env.VITE_API_BASE_URL + '/api/v1',
-        prepareHeaders: (headers, { getState }) => {
+        prepareHeaders: (headers, { getState, endpoint }) => {
+            if (endpoint === 'resetPassword') {
+                try {
+                    const resetToken =
+                        typeof localStorage !== 'undefined'
+                            ? localStorage.getItem('resetPasswordToken')
+                            : null
+                    if (resetToken) {
+                        headers.set('authorization', resetToken)
+                    }
+                } catch {
+                    // ignore storage errors
+                }
+                return headers
+            }
+
             const stateToken = (getState() as RootState).auth.token
             const token =
                 stateToken ??
@@ -41,6 +56,8 @@ export const baseApi = createApi({
   'Setting',
   'ProviderOrders',
   'DashboardStats',
+  'Wallet',
+  'PaymentAccount',
 ],
   
    

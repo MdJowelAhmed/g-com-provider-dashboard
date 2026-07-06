@@ -3,32 +3,31 @@ import {
   Banknote,
   Wallet,
   ArrowUpRight,
-  Zap,
   Clock,
   CheckCircle2,
   AlertTriangle,
   XCircle,
-  Building2,
-  Calendar,
+  Smartphone,
   ShieldCheck,
-  ExternalLink,
   Ban,
+  Loader2,
 } from 'lucide-react'
 import { Modal, message } from 'antd'
 import PageHeader from '../../../components/dashboard/PageHeader'
 import { useAuth } from '../../../context/AuthContext'
 import {
-  INITIAL_BALANCE,
-  INITIAL_STRIPE_ACCOUNT,
-  INITIAL_WITHDRAWALS,
-  MAXIMUM_WITHDRAWAL,
-  MINIMUM_WITHDRAWAL,
-  calculateFee,
-  expectedArrivalISO,
-  type Balance,
-  type StripeAccount,
+  useGetEarningsStatsQuery,
+  useGetPaymentAccountQuery,
+  useWithdrawEarningsMutation,
+  type PaymentAccountData,
+} from '../../../redux/api/earningsPayoutApi'
+import PaymentAccountModal, {
+  type PaymentAccountModalMode,
+} from './PaymentAccountModal'
+import {
+  getApiErrorMessage,
+  isNotFoundError,
   type Withdrawal,
-  type WithdrawalSpeed,
   type WithdrawalStatus,
 } from './withdrawTypes'
 
@@ -48,18 +47,15 @@ const STATUS_LABEL: Record<WithdrawalStatus, string> = {
   canceled: 'Canceled',
 }
 
-const SCHEDULE_LABEL: Record<StripeAccount['schedule'], string> = {
-  manual: 'Manual payouts',
-  daily: 'Daily auto-payout',
-  weekly: 'Weekly auto-payout',
-  monthly: 'Monthly auto-payout',
-}
-
-function formatMoney(n: number, currency = 'USD') {
-  return new Intl.NumberFormat(undefined, {
-    style: 'currency',
-    currency,
-  }).format(n)
+function formatMoney(n: number, currency = 'GHS') {
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: 'currency',
+      currency,
+    }).format(n)
+  } catch {
+    return `${currency} ${n.toLocaleString()}`
+  }
 }
 
 function formatDate(iso: string) {
@@ -77,6 +73,11 @@ function formatDateTime(iso: string) {
   })
 }
 
+function maskMomoNumber(number: string) {
+  if (number.length <= 4) return number
+  return `${'•'.repeat(Math.max(0, number.length - 4))}${number.slice(-4)}`
+}
+
 function makeReference() {
   const n = Math.floor(Math.random() * 90000) + 10000
   return `WD-${n}`
@@ -89,31 +90,72 @@ function makeId() {
   return `wd_${Date.now().toString(36)}`
 }
 
-export default function WithdrawPage() {
-  const { user, connectStripe } = useAuth()
+function clampAmountInput(raw: string, max: number) {
+  if (raw === '' || raw === '.') return raw
+  const parsed = Number.parseFloat(raw)
+  if (Number.isNaN(parsed)) return ''
+  if (parsed < 0) return '0'
+  if (parsed > max) {
+    return Number.isInteger(max) ? String(max) : max.toFixed(2)
+  }
+  return raw
+}
 
-  const [balance, setBalance] = useState<Balance>(INITIAL_BALANCE)
-  const [account] = useState<StripeAccount>(INITIAL_STRIPE_ACCOUNT)
-  const [withdrawals, setWithdrawals] = useState<Withdrawal[]>(INITIAL_WITHDRAWALS)
+export default function WithdrawPage() {
+  const { user } = useAuth()
+
+  const {
+    data: walletRes,
+    isLoading: walletLoading,
+    isError: walletError,
+  } = useGetEarningsStatsQuery()
+  const {
+    data: paymentRes,
+    isLoading: paymentLoading,
+    isError: paymentError,
+    error: paymentErr,
+    refetch: refetchPaymentAccount,
+  } = useGetPaymentAccountQuery()
+
+  const wallet = walletRes?.data
+  const currency = wallet?.currency || 'GHS'
+  const available = wallet?.balance ?? 0
+  const pending = wallet?.pendingBalance ?? 0
+  const lifetimeEarnings = wallet?.totalEarnings ?? 0
+
+  const paymentAccount = paymentRes?.data ?? null
+  const paymentMissing = paymentError && isNotFoundError(paymentErr)
+  const isConnected = Boolean(paymentAccount?.isActive ?? paymentAccount)
+  const paymentLoadFailed = paymentError && !paymentMissing
+
+  const [withdrawEarnings, { isLoading: isWithdrawing }] =
+    useWithdrawEarningsMutation()
+
+  const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([])
   const [amountInput, setAmountInput] = useState('')
-  const [speed, setSpeed] = useState<WithdrawalSpeed>('standard')
-  const [submitting, setSubmitting] = useState(false)
+  const [accountModalOpen, setAccountModalOpen] = useState(false)
+  const [accountModalMode, setAccountModalMode] =
+    useState<PaymentAccountModalMode>('create')
+
+  const openConnectModal = () => {
+    setAccountModalMode('create')
+    setAccountModalOpen(true)
+  }
+
+  const openUpdateModal = () => {
+    setAccountModalMode('update')
+    setAccountModalOpen(true)
+  }
 
   const amount = Number.parseFloat(amountInput || '0') || 0
-  const fee = calculateFee(amount, speed)
-  const net = Math.max(0, amount - fee)
 
   const validationError = useMemo(() => {
     if (!amountInput) return null
     if (Number.isNaN(amount) || amount <= 0) return 'Enter a valid amount'
-    if (amount < MINIMUM_WITHDRAWAL)
-      return `Minimum withdrawal is ${formatMoney(MINIMUM_WITHDRAWAL)}`
-    if (amount > MAXIMUM_WITHDRAWAL)
-      return `Maximum per withdrawal is ${formatMoney(MAXIMUM_WITHDRAWAL)}`
-    if (amount > balance.available)
-      return `Exceeds available balance (${formatMoney(balance.available)})`
+    if (amount > available)
+      return `Cannot exceed available balance (${formatMoney(available, currency)})`
     return null
-  }, [amountInput, amount, balance.available])
+  }, [amountInput, amount, available, currency])
 
   const historySummary = useMemo(() => {
     const now = new Date()
@@ -127,56 +169,56 @@ export default function WithdrawPage() {
           d.getMonth() === now.getMonth()
         )
       })
-      .reduce((s, w) => s + w.net, 0)
-    const feesPaid = withdrawals
-      .filter((w) => w.status === 'paid')
-      .reduce((s, w) => s + w.fee, 0)
+      .reduce((s, w) => s + w.amount, 0)
     const lastPaid = withdrawals.find((w) => w.status === 'paid')
-    return { thisMonthWithdrawn, feesPaid, lastPaid }
+    return { thisMonthWithdrawn, lastPaid }
   }, [withdrawals])
-
-  const isConnected = user?.stripeConnected ?? false
 
   const canSubmit =
     isConnected &&
     amount > 0 &&
+    amount <= available &&
     !validationError &&
-    !submitting &&
-    account.payoutsEnabled
+    !isWithdrawing
 
-  const handleWithdrawAll = () => {
-    setAmountInput(balance.available.toFixed(2))
+  const handleAmountChange = (raw: string) => {
+    setAmountInput(clampAmountInput(raw, available))
   }
 
-  const handleSubmit = () => {
-    if (!canSubmit) return
-    setSubmitting(true)
+  const handleWithdrawAll = () => {
+    if (available <= 0) return
+    setAmountInput(Number.isInteger(available) ? String(available) : available.toFixed(2))
+  }
 
-    const withdrawal: Withdrawal = {
-      id: makeId(),
-      reference: makeReference(),
-      amount,
-      fee,
-      net,
-      speed,
-      status: 'pending',
-      destinationLast4: account.last4,
-      destinationBank: account.bankName,
-      requestedAt: new Date().toISOString(),
-      expectedArrival: expectedArrivalISO(speed),
+  const handleSubmit = async () => {
+    if (!canSubmit || !paymentAccount) return
+
+    try {
+      const res = await withdrawEarnings({ amount }).unwrap()
+      if (!res.success) {
+        void message.error(res.message || 'Withdrawal failed')
+        return
+      }
+
+      const withdrawal: Withdrawal = {
+        id: makeId(),
+        reference: makeReference(),
+        amount,
+        status: 'pending',
+        destinationLast4: paymentAccount.momoNumber.slice(-4),
+        destinationBank: paymentAccount.momoProvider,
+        requestedAt: new Date().toISOString(),
+      }
+
+      setWithdrawals((prev) => [withdrawal, ...prev])
+      setAmountInput('')
+      void message.success(
+        res.message ||
+          `Withdrawal of ${formatMoney(amount, currency)} initiated · ${withdrawal.reference}`,
+      )
+    } catch (error) {
+      void message.error(getApiErrorMessage(error, 'Failed to withdraw earnings'))
     }
-
-    setWithdrawals((prev) => [withdrawal, ...prev])
-    setBalance((prev) => ({
-      ...prev,
-      available: prev.available - amount,
-      inTransit: prev.inTransit + amount,
-    }))
-    setAmountInput('')
-    void message.success(
-      `Withdrawal of ${formatMoney(amount)} initiated · ${withdrawal.reference}`,
-    )
-    setTimeout(() => setSubmitting(false), 300)
   }
 
   const cancelWithdrawal = (w: Withdrawal) => {
@@ -184,8 +226,8 @@ export default function WithdrawPage() {
       title: `Cancel withdrawal ${w.reference}?`,
       content: (
         <span>
-          This will return <b>{formatMoney(w.amount)}</b> to your available balance. Only pending
-          withdrawals can be canceled.
+          This will return <b>{formatMoney(w.amount, currency)}</b> to your available balance. Only
+          pending withdrawals can be canceled.
         </span>
       ),
       okText: 'Cancel withdrawal',
@@ -196,263 +238,244 @@ export default function WithdrawPage() {
         setWithdrawals((prev) =>
           prev.map((x) => (x.id === w.id ? { ...x, status: 'canceled' } : x)),
         )
-        setBalance((prev) => ({
-          ...prev,
-          available: prev.available + w.amount,
-          inTransit: Math.max(0, prev.inTransit - w.amount),
-        }))
       },
     })
   }
+
+  const isLoading = walletLoading || paymentLoading
+
+  if (!user) return null
 
   return (
     <div>
       <PageHeader
         title="Withdraw funds"
-        description="Move your available balance to your connected Stripe account."
+        description="Move your available balance to your connected Mobile Money account."
       />
 
-      {!isConnected && <ConnectStripeBanner onConnect={connectStripe} />}
+      {!isConnected && !paymentLoading && !paymentLoadFailed && (
+        <ConnectBanner onConnect={openConnectModal} />
+      )}
 
-      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <BalanceTile
-          label="Available"
-          value={formatMoney(balance.available)}
-          tone="success"
-          icon={<Wallet size={14} />}
-          help="Ready to withdraw now"
-        />
-        <BalanceTile
-          label="Pending"
-          value={formatMoney(balance.pending)}
-          tone="warning"
-          icon={<Clock size={14} />}
-          help="Clears in 2–7 days"
-        />
-        <BalanceTile
-          label="In transit"
-          value={formatMoney(balance.inTransit)}
-          tone="info"
-          icon={<ArrowUpRight size={14} />}
-          help="Being sent to your bank"
-        />
-        <BalanceTile
-          label="Lifetime earnings"
-          value={formatMoney(balance.lifetimeEarnings)}
-          tone="neutral"
-          icon={<Banknote size={14} />}
-          help={`${formatMoney(balance.lifetimeWithdrawn)} withdrawn`}
-        />
-      </div>
-
-      <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <div className="lg:col-span-2 rounded-xl border border-surface-border bg-surface-card p-5">
-          <div className="mb-1 text-sm font-semibold text-gray-100">Withdraw amount</div>
-          <p className="mb-4 text-xs text-gray-400">
-            Minimum {formatMoney(MINIMUM_WITHDRAWAL)} · Maximum {formatMoney(MAXIMUM_WITHDRAWAL)} per
-            request
-          </p>
-
-          <div className="relative">
-            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-lg font-medium text-gray-400">
-              $
-            </span>
-            <input
-              type="number"
-              min={0}
-              step="0.01"
-              inputMode="decimal"
-              disabled={!isConnected}
-              value={amountInput}
-              onChange={(e) => setAmountInput(e.target.value)}
-              placeholder="0.00"
-              className="h-14 w-full rounded-lg border border-surface-border bg-surface-elevated pl-8 pr-28 text-2xl font-semibold text-gray-100 placeholder:text-gray-500 focus:border-brand focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
-            />
-            <button
-              type="button"
-              disabled={!isConnected || balance.available <= 0}
-              onClick={handleWithdrawAll}
-              className="absolute right-2 top-1/2 h-9 -translate-y-1/2 rounded-md border border-surface-border bg-surface-card px-3 text-xs font-medium text-gray-200 hover:bg-surface-elevated disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Withdraw all
-            </button>
-          </div>
-          {validationError && (
-            <div className="mt-2 flex items-center gap-1.5 text-xs text-accent-danger">
-              <AlertTriangle size={12} /> {validationError}
-            </div>
-          )}
-
-          <div className="mt-5">
-            <div className="mb-2 text-xs font-medium uppercase tracking-wide text-gray-400">
-              Payout speed
-            </div>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <SpeedOption
-                active={speed === 'standard'}
-                disabled={!isConnected}
-                onClick={() => setSpeed('standard')}
-                icon={<Clock size={16} />}
-                title="Standard"
-                subtitle="Arrives in 2 business days"
-                trailing="Free"
-              />
-              <SpeedOption
-                active={speed === 'instant'}
-                disabled={!isConnected}
-                onClick={() => setSpeed('instant')}
-                icon={<Zap size={16} />}
-                title="Instant"
-                subtitle="Arrives within 30 minutes"
-                trailing="1.5% fee"
-              />
-            </div>
-          </div>
-
-          <div className="mt-5 rounded-lg border border-surface-border bg-surface-elevated p-4 text-sm">
-            <SummaryRow label="Amount" value={formatMoney(amount)} />
-            <SummaryRow
-              label={`Fee${speed === 'instant' ? ' (1.5%)' : ''}`}
-              value={fee > 0 ? `-${formatMoney(fee)}` : formatMoney(0)}
-              tone={fee > 0 ? 'danger' : undefined}
-            />
-            <div className="my-2 border-t border-surface-border" />
-            <SummaryRow label="You receive" value={formatMoney(net)} strong />
-            <div className="mt-2 text-xs text-gray-400">
-              Expected arrival:{' '}
-              <span className="text-gray-200">
-                {formatDateTime(expectedArrivalISO(speed))}
-              </span>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            disabled={!canSubmit}
-            onClick={handleSubmit}
-            className="mt-5 flex h-11 w-full items-center justify-center gap-2 rounded-md bg-brand px-4 text-sm font-semibold text-white hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <ArrowUpRight size={16} />
-            {isConnected ? `Withdraw ${amount > 0 ? formatMoney(amount) : ''}` : 'Connect Stripe to withdraw'}
-          </button>
+      {(walletError || paymentLoadFailed) && (
+        <div className="mb-5 rounded-xl border border-accent-danger/40 bg-accent-danger/10 px-4 py-3 text-sm text-accent-danger">
+          Could not load wallet or payment account. Please try again.
         </div>
+      )}
 
-        <AccountCard account={account} isConnected={isConnected} onConnect={connectStripe} />
-      </div>
+      {isLoading ? (
+        <div className="flex min-h-[40vh] items-center justify-center text-gray-400">
+          <Loader2 className="animate-spin" size={28} />
+        </div>
+      ) : (
+        <>
+          <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <BalanceTile
+              label="Available balance"
+              value={formatMoney(available, currency)}
+              tone="success"
+              icon={<Wallet size={14} />}
+              help="Ready to withdraw now"
+            />
+            <BalanceTile
+              label="Pending balance"
+              value={formatMoney(pending, currency)}
+              tone="warning"
+              icon={<Clock size={14} />}
+              help="Not yet available"
+            />
+            <BalanceTile
+              label="Lifetime earnings"
+              value={formatMoney(lifetimeEarnings, currency)}
+              tone="neutral"
+              icon={<Banknote size={14} />}
+              help="Total earnings to date"
+            />
+          </div>
 
-      <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <MiniStat
-          label="This month"
-          value={formatMoney(historySummary.thisMonthWithdrawn)}
-        />
-        <MiniStat
-          label="Last successful"
-          value={
-            historySummary.lastPaid
-              ? `${formatMoney(historySummary.lastPaid.net)} · ${formatDate(historySummary.lastPaid.completedAt ?? historySummary.lastPaid.requestedAt)}`
-              : '—'
-          }
-        />
-        <MiniStat
-          label="Total fees paid"
-          value={formatMoney(historySummary.feesPaid)}
-        />
-      </div>
+          <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
+            <div className="lg:col-span-2 rounded-xl border border-surface-border bg-surface-card p-5">
+              <div className="mb-1 text-sm font-semibold text-gray-100">Withdraw amount</div>
+              <p className="mb-4 text-xs text-gray-400">
+                Enter any amount up to your available balance (
+                {formatMoney(available, currency)}), or withdraw everything at once.
+              </p>
 
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-gray-100">Withdrawal history</h2>
-        <span className="text-xs text-gray-500">{withdrawals.length} records</span>
-      </div>
-
-      <div className="overflow-hidden rounded-xl border border-surface-border bg-surface-card">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[960px] text-sm">
-            <thead>
-              <tr className="border-b border-surface-border bg-surface-elevated text-left text-xs uppercase tracking-wide text-gray-400">
-                <th className="px-4 py-3 font-medium">Reference</th>
-                <th className="px-4 py-3 font-medium">Requested</th>
-                <th className="px-4 py-3 text-right font-medium">Amount</th>
-                <th className="px-4 py-3 text-right font-medium">Fee</th>
-                <th className="px-4 py-3 text-right font-medium">Net</th>
-                <th className="px-4 py-3 font-medium">Speed</th>
-                <th className="px-4 py-3 font-medium">Destination</th>
-                <th className="px-4 py-3 font-medium">Status</th>
-                <th className="px-4 py-3 font-medium">Arrival</th>
-                <th className="px-4 py-3 text-right font-medium">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {withdrawals.length === 0 ? (
-                <tr>
-                  <td colSpan={10} className="px-4 py-10 text-center text-gray-500">
-                    No withdrawals yet.
-                  </td>
-                </tr>
-              ) : (
-                withdrawals.map((w) => (
-                  <tr
-                    key={w.id}
-                    className="border-b border-surface-border last:border-b-0 hover:bg-surface-elevated"
-                  >
-                    <td className="px-4 py-3 font-mono text-xs text-gray-200">{w.reference}</td>
-                    <td className="px-4 py-3 text-gray-300">{formatDateTime(w.requestedAt)}</td>
-                    <td className="px-4 py-3 text-right text-gray-100">{formatMoney(w.amount)}</td>
-                    <td className="px-4 py-3 text-right text-gray-400">
-                      {w.fee > 0 ? formatMoney(w.fee) : '—'}
-                    </td>
-                    <td className="px-4 py-3 text-right font-medium text-gray-100">
-                      {formatMoney(w.net)}
-                    </td>
-                    <td className="px-4 py-3 capitalize text-gray-300">
-                      <span className="inline-flex items-center gap-1">
-                        {w.speed === 'instant' ? <Zap size={12} /> : <Clock size={12} />}
-                        {w.speed}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-gray-300">
-                      {w.destinationBank} •• {w.destinationLast4}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-col gap-1">
-                        <span
-                          className={`inline-flex w-max items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_STYLE[w.status]}`}
-                        >
-                          {statusIcon(w.status)}
-                          {STATUS_LABEL[w.status]}
-                        </span>
-                        {w.status === 'failed' && w.failureReason && (
-                          <span className="text-xs text-gray-500">{w.failureReason}</span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-gray-300">
-                      {w.completedAt
-                        ? formatDate(w.completedAt)
-                        : formatDate(w.expectedArrival)}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center justify-end">
-                        {w.status === 'pending' ? (
-                          <button
-                            type="button"
-                            title="Cancel withdrawal"
-                            onClick={() => cancelWithdrawal(w)}
-                            className="flex h-8 items-center gap-1 rounded-md border border-surface-border px-2 text-xs text-gray-300 hover:border-accent-danger/60 hover:text-accent-danger"
-                          >
-                            <Ban size={12} /> Cancel
-                          </button>
-                        ) : (
-                          <span className="text-xs text-gray-500">—</span>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))
+              <div className="relative">
+                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-lg font-medium text-gray-400">
+                  {currency}
+                </span>
+                <input
+                  type="number"
+                  min={0}
+                  max={available}
+                  step="0.01"
+                  inputMode="decimal"
+                  disabled={!isConnected || available <= 0}
+                  value={amountInput}
+                  onChange={(e) => handleAmountChange(e.target.value)}
+                  placeholder="0.00"
+                  className="h-14 w-full rounded-lg border border-surface-border bg-surface-elevated pl-14 pr-28 text-2xl font-semibold text-gray-100 placeholder:text-gray-500 focus:border-brand focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+                />
+                <button
+                  type="button"
+                  disabled={!isConnected || available <= 0}
+                  onClick={handleWithdrawAll}
+                  className="absolute right-2 top-1/2 h-9 -translate-y-1/2 rounded-md border border-surface-border bg-surface-card px-3 text-xs font-medium text-gray-200 hover:bg-surface-elevated disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Withdraw all
+                </button>
+              </div>
+              {validationError && (
+                <div className="mt-2 flex items-center gap-1.5 text-xs text-accent-danger">
+                  <AlertTriangle size={12} /> {validationError}
+                </div>
               )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+
+              <div className="mt-5 rounded-lg border border-surface-border bg-surface-elevated p-4 text-sm">
+                <SummaryRow label="Available" value={formatMoney(available, currency)} />
+                <SummaryRow label="Withdrawing" value={formatMoney(amount, currency)} />
+                <div className="my-2 border-t border-surface-border" />
+                <SummaryRow
+                  label="Remaining"
+                  value={formatMoney(Math.max(0, available - amount), currency)}
+                  strong
+                />
+              </div>
+
+              <button
+                type="button"
+                disabled={!canSubmit}
+                onClick={() => void handleSubmit()}
+                className="mt-5 flex h-11 w-full items-center justify-center gap-2 rounded-md bg-brand px-4 text-sm font-semibold text-white hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isWithdrawing ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : (
+                  <ArrowUpRight size={16} />
+                )}
+                {isConnected
+                  ? isWithdrawing
+                    ? 'Withdrawing…'
+                    : `Withdraw ${amount > 0 ? formatMoney(amount, currency) : ''}`
+                  : 'Connect payment account to withdraw'}
+              </button>
+            </div>
+
+            <AccountCard
+              account={paymentAccount}
+              isConnected={isConnected}
+              onConnect={openConnectModal}
+              onUpdate={openUpdateModal}
+            />
+          </div>
+
+          <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <MiniStat
+              label="This month"
+              value={formatMoney(historySummary.thisMonthWithdrawn, currency)}
+            />
+            <MiniStat
+              label="Last successful"
+              value={
+                historySummary.lastPaid
+                  ? `${formatMoney(historySummary.lastPaid.amount, currency)} · ${formatDate(historySummary.lastPaid.completedAt ?? historySummary.lastPaid.requestedAt)}`
+                  : '—'
+              }
+            />
+          </div>
+
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-gray-100">Withdrawal history</h2>
+            <span className="text-xs text-gray-500">{withdrawals.length} records</span>
+          </div>
+
+          <div className="overflow-hidden rounded-xl border border-surface-border bg-surface-card">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[720px] text-sm">
+                <thead>
+                  <tr className="border-b border-surface-border bg-surface-elevated text-left text-xs uppercase tracking-wide text-gray-400">
+                    <th className="px-4 py-3 font-medium">Reference</th>
+                    <th className="px-4 py-3 font-medium">Requested</th>
+                    <th className="px-4 py-3 text-right font-medium">Amount</th>
+                    <th className="px-4 py-3 font-medium">Destination</th>
+                    <th className="px-4 py-3 font-medium">Status</th>
+                    <th className="px-4 py-3 text-right font-medium">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {withdrawals.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="px-4 py-10 text-center text-gray-500">
+                        No withdrawals yet.
+                      </td>
+                    </tr>
+                  ) : (
+                    withdrawals.map((w) => (
+                      <tr
+                        key={w.id}
+                        className="border-b border-surface-border last:border-b-0 hover:bg-surface-elevated"
+                      >
+                        <td className="px-4 py-3 font-mono text-xs text-gray-200">
+                          {w.reference}
+                        </td>
+                        <td className="px-4 py-3 text-gray-300">
+                          {formatDateTime(w.requestedAt)}
+                        </td>
+                        <td className="px-4 py-3 text-right font-medium text-gray-100">
+                          {formatMoney(w.amount, currency)}
+                        </td>
+                        <td className="px-4 py-3 text-gray-300">
+                          {w.destinationBank} •• {w.destinationLast4}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex flex-col gap-1">
+                            <span
+                              className={`inline-flex w-max items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_STYLE[w.status]}`}
+                            >
+                              {statusIcon(w.status)}
+                              {STATUS_LABEL[w.status]}
+                            </span>
+                            {w.status === 'failed' && w.failureReason && (
+                              <span className="text-xs text-gray-500">{w.failureReason}</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center justify-end">
+                            {w.status === 'pending' ? (
+                              <button
+                                type="button"
+                                title="Cancel withdrawal"
+                                onClick={() => cancelWithdrawal(w)}
+                                className="flex h-8 items-center gap-1 rounded-md border border-surface-border px-2 text-xs text-gray-300 hover:border-accent-danger/60 hover:text-accent-danger"
+                              >
+                                <Ban size={12} /> Cancel
+                              </button>
+                            ) : (
+                              <span className="text-xs text-gray-500">—</span>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+
+      <PaymentAccountModal
+        open={accountModalOpen}
+        mode={accountModalMode}
+        account={paymentAccount}
+        onClose={() => setAccountModalOpen(false)}
+        onSaved={() => {
+          void refetchPaymentAccount()
+        }}
+      />
     </div>
   )
 }
@@ -472,17 +495,16 @@ function statusIcon(status: WithdrawalStatus) {
   }
 }
 
-function ConnectStripeBanner({ onConnect }: { onConnect: () => void }) {
+function ConnectBanner({ onConnect }: { onConnect: () => void }) {
   return (
     <div className="mb-5 flex items-start gap-3 rounded-xl border border-accent-amber/40 bg-accent-amber/10 p-4 text-sm">
       <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent-amber/20 text-accent-amber">
         <AlertTriangle size={16} />
       </div>
       <div className="flex-1 text-accent-amber">
-        <div className="font-medium">Connect Stripe to start withdrawing</div>
+        <div className="font-medium">Connect a payment account to start withdrawing</div>
         <p className="mt-0.5 text-xs text-accent-amber/80">
-          Your earnings keep accruing in your balance. Link a Stripe account to move them to your
-          bank.
+          Your earnings keep accruing in your balance. Link a Mobile Money account to move them out.
         </p>
       </div>
       <button
@@ -500,15 +522,17 @@ function AccountCard({
   account,
   isConnected,
   onConnect,
+  onUpdate,
 }: {
-  account: StripeAccount
+  account: PaymentAccountData | null
   isConnected: boolean
   onConnect: () => void
+  onUpdate: () => void
 }) {
   return (
     <div className="rounded-xl border border-surface-border bg-surface-card p-5">
       <div className="mb-4 flex items-center justify-between">
-        <div className="text-sm font-semibold text-gray-100">Stripe account</div>
+        <div className="text-sm font-semibold text-gray-100">Payment account</div>
         {isConnected ? (
           <span className="inline-flex items-center gap-1 rounded-full bg-accent-success/15 px-2 py-0.5 text-xs font-medium text-accent-success">
             <ShieldCheck size={12} /> Connected
@@ -520,10 +544,10 @@ function AccountCard({
         )}
       </div>
 
-      {!isConnected ? (
+      {!isConnected || !account ? (
         <>
           <p className="text-sm text-gray-400">
-            Connect Stripe to enable payouts. We support 135+ countries and multiple currencies.
+            Connect a Mobile Money account (MTN, Vodafone, or AirtelTigo) to enable payouts.
           </p>
           <button
             type="button"
@@ -537,51 +561,35 @@ function AccountCard({
         <div className="space-y-4">
           <div className="flex items-center gap-3 rounded-lg border border-surface-border bg-surface-elevated p-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-md bg-brand/10 text-brand">
-              <Building2 size={18} />
+              <Smartphone size={18} />
             </div>
             <div className="min-w-0 flex-1">
-              <div className="truncate font-medium text-gray-100">{account.bankName}</div>
+              <div className="truncate font-medium text-gray-100">{account.momoName}</div>
               <div className="text-xs text-gray-500">
-                •••• {account.last4} · {account.accountHolder}
+                {maskMomoNumber(account.momoNumber)} · {account.momoProvider}
               </div>
             </div>
           </div>
 
           <div className="space-y-2 text-sm">
-            <KVRow
-              icon={<Calendar size={12} />}
-              label="Payout schedule"
-              value={SCHEDULE_LABEL[account.schedule]}
-            />
-            {account.nextAutoPayoutDate && (
-              <KVRow
-                icon={<Clock size={12} />}
-                label="Next auto-payout"
-                value={formatDate(account.nextAutoPayoutDate)}
-              />
-            )}
+            <KVRow label="Account name" value={account.momoName} />
+            <KVRow label="MoMo number" value={account.momoNumber} mono />
+            <KVRow label="Provider" value={account.momoProvider} />
             <KVRow
               icon={<ShieldCheck size={12} />}
-              label="Verification"
-              value={account.verified ? 'Verified' : 'Pending'}
+              label="Status"
+              value={account.isActive ? 'Active' : 'Inactive'}
             />
-            <KVRow label="Currency" value={account.currency} />
-            <KVRow label="Country" value={account.country} />
-            <KVRow
-              label="Account ID"
-              value={account.accountId}
-              mono
-            />
+            <KVRow label="Connected" value={formatDate(account.createdAt)} />
           </div>
 
-          <a
-            href="https://dashboard.stripe.com"
-            target="_blank"
-            rel="noreferrer"
-            className="flex h-9 w-full items-center justify-center gap-1.5 rounded-md border border-surface-border text-sm text-gray-200 hover:bg-surface-elevated"
+          <button
+            type="button"
+            onClick={onUpdate}
+            className="flex h-10 w-full items-center justify-center gap-1.5 rounded-md border border-surface-border text-sm font-medium text-gray-100 hover:bg-surface-elevated"
           >
-            Open Stripe dashboard <ExternalLink size={12} />
-          </a>
+            Update account
+          </button>
         </div>
       )}
     </div>
@@ -620,73 +628,21 @@ function BalanceTile({
   )
 }
 
-function SpeedOption({
-  active,
-  disabled,
-  onClick,
-  icon,
-  title,
-  subtitle,
-  trailing,
-}: {
-  active: boolean
-  disabled?: boolean
-  onClick: () => void
-  icon: React.ReactNode
-  title: string
-  subtitle: string
-  trailing: string
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className={`flex items-center justify-between rounded-lg border px-3 py-3 text-left transition ${
-        active
-          ? 'border-brand bg-brand/10'
-          : 'border-surface-border bg-surface-elevated hover:border-gray-500'
-      } disabled:cursor-not-allowed disabled:opacity-60`}
-    >
-      <div className="flex items-start gap-2.5">
-        <div
-          className={`mt-0.5 flex h-8 w-8 items-center justify-center rounded-md ${
-            active ? 'bg-brand/20 text-brand' : 'bg-surface-card text-gray-400'
-          }`}
-        >
-          {icon}
-        </div>
-        <div>
-          <div className="text-sm font-medium text-gray-100">{title}</div>
-          <div className="text-xs text-gray-400">{subtitle}</div>
-        </div>
-      </div>
-      <div className="text-xs font-medium text-gray-300">{trailing}</div>
-    </button>
-  )
-}
-
 function SummaryRow({
   label,
   value,
   strong,
-  tone,
 }: {
   label: string
   value: string
   strong?: boolean
-  tone?: 'danger'
 }) {
   return (
     <div className="flex items-center justify-between py-0.5">
       <span className={strong ? 'font-medium text-gray-100' : 'text-gray-400'}>{label}</span>
       <span
         className={
-          tone === 'danger'
-            ? 'text-accent-danger'
-            : strong
-              ? 'text-base font-semibold text-gray-100'
-              : 'text-gray-200'
+          strong ? 'text-base font-semibold text-gray-100' : 'text-gray-200'
         }
       >
         {value}

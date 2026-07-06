@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
+import type { FetchBaseQueryError } from '@reduxjs/toolkit/query'
 import AuthLayout from '../../layouts/AuthLayout'
 import AuthCard from '../../components/auth/AuthCard'
 import AuthIllustration from '../../components/auth/AuthIllustration'
 import PrimaryButton from '../../components/auth/PrimaryButton'
 import BackToLoginLink from '../../components/auth/BackToLoginLink'
+import { useResentOtpMutation, useVerifyEmailMutation } from '../../redux/api/authApi'
 
 type Purpose = 'forgot' | 'register'
 type LocationState =
@@ -16,6 +18,19 @@ type LocationState =
 
 const OTP_LENGTH = 6
 
+function getAuthApiErrorMessage(error: unknown, fallback: string) {
+  if (error && typeof error === 'object' && 'data' in error) {
+    const data = (error as FetchBaseQueryError).data
+    if (data && typeof data === 'object') {
+      const payload = data as { message?: unknown }
+      if (typeof payload.message === 'string' && payload.message.trim()) {
+        return payload.message
+      }
+    }
+  }
+  return fallback
+}
+
 export default function VerifyEmail() {
   const navigate = useNavigate()
   const location = useLocation()
@@ -24,6 +39,9 @@ export default function VerifyEmail() {
   const email = (state?.email ?? '').trim()
   const purpose: Purpose = state?.purpose ?? 'forgot'
 
+  const [verifyEmail, { isLoading: verifying }] = useVerifyEmailMutation()
+  const [resendOtp, { isLoading: resending }] = useResentOtpMutation()
+
   const [digits, setDigits] = useState<string[]>(() =>
     Array.from({ length: OTP_LENGTH }, () => ''),
   )
@@ -31,10 +49,15 @@ export default function VerifyEmail() {
   const inputRefs = useRef<Array<HTMLInputElement | null>>([])
 
   const otp = useMemo(() => digits.join(''), [digits])
+  const isLoading = verifying || resending
 
   useEffect(() => {
+    if (!email) {
+      navigate('/forgot-password', { replace: true })
+      return
+    }
     inputRefs.current[0]?.focus()
-  }, [])
+  }, [email, navigate])
 
   const setDigit = (index: number, value: string) => {
     setDigits((prev) => {
@@ -51,7 +74,6 @@ export default function VerifyEmail() {
       return
     }
 
-    // If user pastes/types multiple digits into one box, spread forward.
     const chars = value.slice(0, OTP_LENGTH - index).split('')
     setDigits((prev) => {
       const next = [...prev]
@@ -81,7 +103,16 @@ export default function VerifyEmail() {
       inputRefs.current[index + 1]?.focus()
   }
 
-  const onSubmit = (e: FormEvent) => {
+  const handleResend = async () => {
+    setError(null)
+    try {
+      await resendOtp({ email }).unwrap()
+    } catch (err) {
+      setError(getAuthApiErrorMessage(err, 'Could not resend code. Please try again.'))
+    }
+  }
+
+  const onSubmit = async (e: FormEvent) => {
     e.preventDefault()
     if (!email) {
       setError('Missing email. Please restart the flow.')
@@ -94,23 +125,31 @@ export default function VerifyEmail() {
 
     setError(null)
 
-    if (purpose === 'forgot') {
-      navigate('/reset-password', { state: { email, otp } })
-      return
-    }
+    try {
+      await verifyEmail({
+        email,
+        oneTimeCode: Number(otp),
+        purpose: 'forgot',
+      }).unwrap()
 
-    // For registration, wire this to your API later.
-    navigate('/login', { replace: true })
+      if (purpose === 'forgot') {
+        navigate('/reset-password', { state: { email } })
+        return
+      }
+
+      navigate('/login', { replace: true })
+    } catch (err) {
+      setError(getAuthApiErrorMessage(err, 'Invalid verification code. Please try again.'))
+    }
   }
 
-  const title = purpose === 'forgot' ? 'Verify your email' : 'Verify your email'
   const description = email
     ? `Enter the 6-digit code we sent to ${email}.`
     : 'Enter the 6-digit code we sent to your email.'
 
   return (
     <AuthLayout illustration={<AuthIllustration src="/assets/verify.png" alt="Verify email illustration" />}>
-      <AuthCard title={title} description={description} >
+      <AuthCard title="Verify your email" description={description}>
         <form onSubmit={onSubmit} className="space-y-5">
           <div>
             <div className="flex items-center justify-between gap-2">
@@ -126,7 +165,8 @@ export default function VerifyEmail() {
                   value={digits[i]}
                   onChange={(e) => handleChange(i, e.target.value)}
                   onKeyDown={(e) => handleKeyDown(i, e)}
-                  className="h-12 w-12 rounded-md bg-white text-center text-lg font-semibold text-gray-900 outline-none focus:ring-2 focus:ring-brand-ring"
+                  disabled={isLoading}
+                  className="h-12 w-12 rounded-md bg-white text-center text-lg font-semibold text-gray-900 outline-none focus:ring-2 focus:ring-brand-ring disabled:opacity-60"
                   maxLength={OTP_LENGTH}
                 />
               ))}
@@ -135,10 +175,11 @@ export default function VerifyEmail() {
               Didn&apos;t receive the code?{' '}
               <button
                 type="button"
-                className="font-medium text-accent-amber hover:underline"
-                onClick={() => setError('Resend is not wired yet.')}
+                className="font-medium text-accent-amber hover:underline disabled:opacity-60"
+                disabled={isLoading}
+                onClick={handleResend}
               >
-                Resend
+                {resending ? 'Sending…' : 'Resend'}
               </button>
             </div>
           </div>
@@ -149,7 +190,9 @@ export default function VerifyEmail() {
             </p>
           )}
 
-          <PrimaryButton type="submit">Verify</PrimaryButton>
+          <PrimaryButton type="submit" disabled={isLoading}>
+            {verifying ? 'Verifying…' : 'Verify'}
+          </PrimaryButton>
         </form>
 
         <BackToLoginLink />
@@ -157,4 +200,3 @@ export default function VerifyEmail() {
     </AuthLayout>
   )
 }
-

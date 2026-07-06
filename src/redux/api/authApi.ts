@@ -37,6 +37,7 @@ interface ChangePasswordResponse {
 interface VerifyEmailPayload {
     email: string;
     oneTimeCode: number;
+    purpose?: 'forgot' | 'register';
 }
 
 interface VerifyEmailResponse {
@@ -55,8 +56,9 @@ function extractVerifyEmailToken(data: VerifyEmailResponse['data']): string | nu
 }
 
 interface ResetPasswordPayload {
+    email: string;
     newPassword: string;
-    confirmNewPassword: string;
+    confirmPassword: string;
 }
 
 interface ResetPasswordResponse {
@@ -289,10 +291,10 @@ const authApi = baseApi.injectEndpoints({
             invalidatesTags: ['Auth'],
         }),
         verifyEmail: builder.mutation<VerifyEmailResponse, VerifyEmailPayload>({
-            query: (credentials) => ({
+            query: ({ email, oneTimeCode }) => ({
                 url: '/auth/verify-email',
                 method: 'POST',
-                body: credentials,
+                body: { email, oneTimeCode },
             }),
             async onQueryStarted(credentials, { queryFulfilled, dispatch }) {
                 try {
@@ -300,20 +302,20 @@ const authApi = baseApi.injectEndpoints({
                     const token = extractVerifyEmailToken(data?.data);
                     if (!token) return;
 
-                    if (typeof data.data === 'object' && data.data.token) {
-                        persistAuthStorage(token);
-                        dispatch(
-                            loginSuccess({
-                                token,
-                                email: credentials.email,
-                            }),
-                        );
+                    if (credentials.purpose === 'forgot') {
+                        if (typeof localStorage !== 'undefined') {
+                            localStorage.setItem('resetPasswordToken', token);
+                        }
                         return;
                     }
 
-                    if (typeof localStorage !== 'undefined') {
-                        localStorage.setItem('resetPasswordToken', token);
-                    }
+                    persistAuthStorage(token);
+                    dispatch(
+                        loginSuccess({
+                            token,
+                            email: credentials.email,
+                        }),
+                    );
                 } catch {
                     // RTK Query handles mutation errors
                 }
@@ -349,28 +351,38 @@ const authApi = baseApi.injectEndpoints({
 
         resetPassword: builder.mutation<ResetPasswordResponse, ResetPasswordPayload>({
             query: (credentials) => {
-                // Read the reset token that was returned from verify-email
-                let resetToken: string | null = null;
+                let resetToken: string | null = null
                 try {
-                    resetToken = typeof localStorage !== 'undefined'
-                        ? localStorage.getItem('resetPasswordToken')
-                        : null;
+                    resetToken =
+                        typeof localStorage !== 'undefined'
+                            ? localStorage.getItem('resetPasswordToken')
+                            : null
                 } catch {
-                    resetToken = null;
-                }
-
-                const headers: Record<string, string> = {};
-                if (resetToken) {
-                    // Backend expects this token in the Authorization header
-                    headers.Authorization = resetToken;
+                    resetToken = null
                 }
 
                 return {
                     url: '/auth/reset-password',
                     method: 'POST',
-                    body: credentials,
-                    headers,
-                };
+                    body: {
+                        email: credentials.email,
+                        newPassword: credentials.newPassword,
+                        confirmPassword: credentials.confirmPassword,
+                    },
+                    ...(resetToken
+                        ? { headers: { authorization: resetToken } }
+                        : {}),
+                }
+            },
+            async onQueryStarted(_arg, { queryFulfilled }) {
+                try {
+                    await queryFulfilled;
+                    if (typeof localStorage !== 'undefined') {
+                        localStorage.removeItem('resetPasswordToken');
+                    }
+                } catch {
+                    // RTK Query handles mutation errors
+                }
             },
             invalidatesTags: ['Auth'],
         }),
