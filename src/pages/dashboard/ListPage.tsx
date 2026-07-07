@@ -24,6 +24,7 @@ import MessagesPage from './messaging/MessagesPage'
 import PostsPage from './posts/PostsPage'
 import ContactSupportPage from './support/ContactSupportPage'
 import SettingsPage from './settings/SettingsPage'
+import NotificationsPage from './notifications/NotificationsPage'
 import ControllersPage from './controllers/ControllersPage'
 
 export default function ListPage() {
@@ -32,6 +33,10 @@ export default function ListPage() {
   const { tab } = useParams<{ tab: string }>()
 
   if (!user) return null
+
+  if (tab === 'notifications') {
+    return <NotificationsPage />
+  }
 
   if (tab && !canAccessDashboardTab(user, tab)) {
     return <Navigate to={`/dashboard/${user.role}`} replace />

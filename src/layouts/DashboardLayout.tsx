@@ -1,6 +1,7 @@
 import { Outlet, useNavigate } from 'react-router-dom'
 import Sidebar from '../components/dashboard/Sidebar'
 import Topbar from '../components/dashboard/Topbar'
+import NotificationSocketListener from '../components/dashboard/NotificationSocketListener'
 import { useAuth } from '../context/AuthContext'
 import { useLogoutMutation } from '../redux/api/authApi'
 import { ROLE_META } from '../config/roleConfig'
@@ -26,6 +27,7 @@ export default function DashboardLayout() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-surface-page text-gray-100">
+      <NotificationSocketListener />
       <Sidebar meta={meta} onLogout={handleLogout} />
       <div className="flex h-screen min-w-0 flex-1 flex-col">
         <Topbar user={user} />

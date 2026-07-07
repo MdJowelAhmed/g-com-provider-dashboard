@@ -10,6 +10,7 @@ import './api/roomApi'
 import './api/myBookingApi'
 import './api/dashboardApi'
 import './api/earningsPayoutApi'
+import './api/notificationApi'
 import authReducer from './slice/authSlice'
 
 export const store = configureStore({
