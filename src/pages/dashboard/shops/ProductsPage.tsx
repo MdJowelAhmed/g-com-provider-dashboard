@@ -1,36 +1,28 @@
 import { useEffect, useMemo, useState } from 'react'
-import {
-  Plus,
-  Search,
-  Pencil,
-  Trash2,
-  Eye,
-  EyeOff,
-  Star,
-  ImageOff,
-} from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, ImageOff } from 'lucide-react'
 import { Modal, message } from 'antd'
 import type { FetchBaseQueryError } from '@reduxjs/toolkit/query'
 import PageHeader from '../../../components/dashboard/PageHeader'
 import ProductFormModal, { type ProductSubmitValues } from './ProductFormModal'
-import ReviewsDrawer, { type ReviewEntry } from '../../../components/dashboard/ReviewsDrawer'
 import {
   useCreateProductMutation,
+  useDeleteProductMutation,
   useGetProductsQuery,
+  useUpdateProductMutation,
   type ProductApiDoc,
+  type ProductRelationRef,
 } from '../../../redux/api/productsApi'
 import {
   uploadImageFile,
   useGetPresignedUploadUrlMutation,
 } from '../../../redux/api/imageUploadApi'
 import {
-  INITIAL_PRODUCTS,
-  PRODUCT_CATEGORIES,
+  DELIVERY_METHOD_OPTIONS,
   PRODUCT_STATUS_OPTIONS,
+  type DeliveryMethod,
   type Product,
   type ProductStatus,
 } from './productTypes'
-import { INITIAL_ORDERS } from './orderTypes'
 
 type ModalState =
   | { mode: 'closed' }
@@ -51,6 +43,24 @@ function formatDateTime(value: string | null | undefined) {
   return date.toLocaleString()
 }
 
+function normalizeDeliveryMethod(value: string | undefined): DeliveryMethod {
+  const match = DELIVERY_METHOD_OPTIONS.find((o) => o.value === value)
+  return match ? match.value : 'external-delivery'
+}
+
+function refId(ref: ProductRelationRef): string {
+  if (!ref) return ''
+  if (typeof ref === 'string') return ref
+  return ref._id
+}
+
+function refName(ref: ProductRelationRef): string {
+  if (!ref || typeof ref === 'string') return ''
+  if ('name' in ref && ref.name) return ref.name
+  if ('branchName' in ref && ref.branchName) return ref.branchName
+  return ''
+}
+
 function mapProductFromApi(doc: ProductApiDoc): Product {
   const normalizedStatus = doc.status === 'archive' ? 'archived' : doc.status
   return {
@@ -67,6 +77,20 @@ function mapProductFromApi(doc: ProductApiDoc): Product {
     stock: 0,
     lowStockThreshold: 5,
     weight: null,
+    deliveryMethod: normalizeDeliveryMethod(doc.deliveryMethod),
+    deliveryFee: doc.deliveryFee ?? 0,
+    deliveryTime:
+      typeof doc.deliveryTime === 'string'
+        ? doc.deliveryTime
+        : doc.deliveryTime != null
+          ? String(doc.deliveryTime)
+          : '',
+    subCategory: refId(doc.subCategory),
+    subCategoryName: refName(doc.subCategory),
+    branch: refId(doc.branch),
+    branchName: refName(doc.branch),
+    businessCategory: refId(doc.businessCategory),
+    businessCategoryName: refName(doc.businessCategory),
     variants: '',
     tags: '',
     status: normalizedStatus === 'active' || normalizedStatus === 'draft' ? normalizedStatus : 'archived',
@@ -90,24 +114,6 @@ function getApiErrorMessage(error: unknown, fallback: string) {
   return fallback
 }
 
-function stockBadge(p: Product) {
-  if (p.stock <= 0) {
-    return (
-      <span className="rounded-full bg-accent-danger/15 px-2 py-0.5 text-xs font-medium text-accent-danger">
-        Out of stock
-      </span>
-    )
-  }
-  if (p.stock <= p.lowStockThreshold) {
-    return (
-      <span className="rounded-full bg-accent-amber/15 px-2 py-0.5 text-xs font-medium text-accent-amber">
-        Low · {p.stock}
-      </span>
-    )
-  }
-  return <span className="text-sm text-gray-200">{p.stock}</span>
-}
-
 function statusBadge(status: ProductStatus) {
   const map: Record<ProductStatus, string> = {
     active: 'bg-accent-success/15 text-accent-success',
@@ -124,8 +130,10 @@ function statusBadge(status: ProductStatus) {
 export default function ProductsPage() {
   const { data, isLoading, isFetching, isError } = useGetProductsQuery({ page: 1, limit: 100 })
   const [createProduct, { isLoading: isCreating }] = useCreateProductMutation()
+  const [updateProduct, { isLoading: isUpdating }] = useUpdateProductMutation()
+  const [deleteProduct] = useDeleteProductMutation()
   const [getPresignedUrl] = useGetPresignedUploadUrlMutation()
-  const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS)
+  const [products, setProducts] = useState<Product[]>([])
   useEffect(() => {
     if (!data?.data) return
     setProducts(data.data.map((doc) => mapProductFromApi(doc)))
@@ -133,109 +141,62 @@ export default function ProductsPage() {
 
   const [modal, setModal] = useState<ModalState>({ mode: 'closed' })
   const [search, setSearch] = useState('')
-  const [categoryFilter, setCategoryFilter] = useState<string>(allFilter)
   const [statusFilter, setStatusFilter] = useState<string>(allFilter)
-  const [reviewsOpenId, setReviewsOpenId] = useState<string | null>(null)
-
-  const reviewsBySku = useMemo(() => {
-    const map = new Map<string, ReviewEntry[]>()
-    for (const order of INITIAL_ORDERS) {
-      if (!order.review || order.fulfillmentStatus !== 'delivered') continue
-      for (const item of order.items) {
-        const arr = map.get(item.sku) ?? []
-        if (arr.some((r) => r.id === order.id)) continue
-        arr.push({
-          id: order.id,
-          referenceCode: order.id,
-          customerName: order.customer.name,
-          referenceLabel: item.variant ?? '',
-          rating: order.review.rating,
-          comment: order.review.comment,
-          createdAt: order.review.createdAt,
-        })
-        map.set(item.sku, arr)
-      }
-    }
-    return map
-  }, [])
-
-  const ratingBySku = useMemo(() => {
-    const out = new Map<string, { avg: number; count: number }>()
-    for (const [sku, reviews] of reviewsBySku) {
-      const sum = reviews.reduce((s, r) => s + r.rating, 0)
-      out.set(sku, { avg: sum / reviews.length, count: reviews.length })
-    }
-    return out
-  }, [reviewsBySku])
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
     return products.filter((p) => {
-      if (categoryFilter !== allFilter && p.category !== categoryFilter) return false
       if (statusFilter !== allFilter && p.status !== statusFilter) return false
       if (!q) return true
-      return (
-        p.name.toLowerCase().includes(q) ||
-        p.sku.toLowerCase().includes(q) ||
-        p.brand.toLowerCase().includes(q) ||
-        p.tags.toLowerCase().includes(q)
-      )
+      return p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q)
     })
-  }, [products, search, categoryFilter, statusFilter])
+  }, [products, search, statusFilter])
 
   const totals = useMemo(() => {
     const active = products.filter((p) => p.status === 'active').length
-    const lowStock = products.filter((p) => p.stock > 0 && p.stock <= p.lowStockThreshold).length
-    const outOfStock = products.filter((p) => p.stock <= 0).length
-    const hidden = products.filter((p) => p.hidden).length
-    return { total: products.length, active, lowStock, outOfStock, hidden }
+    const draft = products.filter((p) => p.status === 'draft').length
+    const archived = products.filter((p) => p.status === 'archived').length
+    return { total: products.length, active, draft, archived }
   }, [products])
 
   const handleSubmit = async (values: ProductSubmitValues) => {
+    if (modal.mode === 'closed') return
     const { imageFile, ...rest } = values
-    if (modal.mode === 'edit') {
-      setProducts((prev) =>
-        prev.map((p) =>
-          p.id === modal.product.id
-            ? { ...p, ...rest, updatedAt: new Date().toISOString() }
-            : p,
-        ),
-      )
-      message.success('Product updated')
-    } else if (modal.mode === 'add') {
-      try {
-        let imageUrl = rest.image || ''
-        if (imageFile) {
-          imageUrl = await uploadImageFile(imageFile, async (payload) => {
-            const result = await getPresignedUrl(payload).unwrap()
-            return result
-          })
-        }
 
-        const payload = {
-          name: rest.name,
-          description: rest.description,
-          price: rest.price,
-          deliveryMethod: 'external-delivery',
-          deliveryFee: 0,
-          deliveryTime: 0,
-          image: imageUrl,
-          status: rest.status,
-          sku: rest.sku || undefined,
-        }
+    try {
+      let imageUrl = rest.image || ''
+      if (imageFile) {
+        imageUrl = await uploadImageFile(imageFile, async (payload) => {
+          const result = await getPresignedUrl(payload).unwrap()
+          return result
+        })
+      }
 
+      const payload = {
+        name: rest.name,
+        description: rest.description,
+        price: rest.price,
+        deliveryFee: rest.deliveryFee,
+        deliveryTime: String(rest.deliveryTime),
+        image: imageUrl,
+        businessCategory: rest.businessCategory || undefined,
+        subCategory: rest.subCategory || undefined,
+        branch: rest.branch || undefined,
+      }
+
+      if (modal.mode === 'edit') {
+        await updateProduct({ id: modal.product.id, body: payload }).unwrap()
+        message.success('Product updated')
+      } else {
         await createProduct(payload).unwrap()
         message.success('Product created')
-      } catch (error) {
-        message.error(getApiErrorMessage(error, 'Failed to create product'))
-        throw error
       }
-    }
-    setModal({ mode: 'closed' })
-  }
 
-  const toggleHidden = (id: string) => {
-    setProducts((prev) => prev.map((p) => (p.id === id ? { ...p, hidden: !p.hidden } : p)))
+      setModal({ mode: 'closed' })
+    } catch (error) {
+      message.error(getApiErrorMessage(error, 'Failed to save product'))
+      throw error
+    }
   }
 
   const confirmDelete = (p: Product) => {
@@ -250,7 +211,15 @@ export default function ProductsPage() {
       okButtonProps: { danger: true },
       cancelText: 'Cancel',
       centered: true,
-      onOk: () => setProducts((prev) => prev.filter((x) => x.id !== p.id)),
+      onOk: async () => {
+        try {
+          await deleteProduct(p.id).unwrap()
+          message.success('Product deleted')
+        } catch (error) {
+          message.error(getApiErrorMessage(error, 'Failed to delete product'))
+          throw error
+        }
+      },
     })
   }
 
@@ -270,12 +239,11 @@ export default function ProductsPage() {
         }
       />
 
-      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-5">
+      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <SummaryTile label="Total" value={totals.total} tone="neutral" />
         <SummaryTile label="Active" value={totals.active} tone="success" />
-        <SummaryTile label="Low stock" value={totals.lowStock} tone="warning" />
-        <SummaryTile label="Out of stock" value={totals.outOfStock} tone="danger" />
-        <SummaryTile label="Hidden" value={totals.hidden} tone="muted" />
+        <SummaryTile label="Draft" value={totals.draft} tone="muted" />
+        <SummaryTile label="Archived" value={totals.archived} tone="danger" />
       </div>
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -286,24 +254,12 @@ export default function ProductsPage() {
           />
           <input
             type="text"
-            placeholder="Search by name, SKU, brand, or tag"
+            placeholder="Search by name or SKU"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="h-10 w-full rounded-md border border-surface-border bg-surface-card pl-9 pr-3 text-sm text-gray-100 placeholder:text-gray-500 focus:border-brand focus:outline-none"
           />
         </div>
-        <select
-          value={categoryFilter}
-          onChange={(e) => setCategoryFilter(e.target.value)}
-          className="h-10 rounded-md border border-surface-border bg-surface-card px-3 text-sm text-gray-100 focus:border-brand focus:outline-none"
-        >
-          <option value={allFilter}>All categories</option>
-          {PRODUCT_CATEGORIES.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
@@ -324,28 +280,27 @@ export default function ProductsPage() {
             <thead>
               <tr className="border-b border-surface-border bg-surface-elevated text-left text-xs uppercase tracking-wide text-gray-400">
                 <th className="px-4 py-3 font-medium">Product</th>
-                <th className="px-4 py-3 font-medium">Category</th>
-                <th className="px-4 py-3 font-medium">Brand</th>
+                <th className="px-4 py-3 font-medium">Business category</th>
+                <th className="px-4 py-3 font-medium">Sub category</th>
+                <th className="px-4 py-3 font-medium">Branch</th>
                 <th className="px-4 py-3 text-right font-medium">Price</th>
-                <th className="px-4 py-3 text-right font-medium">Stock</th>
-                <th className="px-4 py-3 font-medium">Rating</th>
+                <th className="px-4 py-3 text-right font-medium">Delivery fee</th>
+                <th className="px-4 py-3 text-right font-medium">Delivery time</th>
                 <th className="px-4 py-3 font-medium">Status</th>
-                <th className="px-4 py-3 font-medium">Visibility</th>
                 <th className="px-4 py-3 font-medium">Created</th>
-                <th className="px-4 py-3 font-medium">Edited</th>
                 <th className="px-4 py-3 text-right font-medium">Actions</th>
               </tr>
             </thead>
             <tbody>
               {isLoading || isFetching ? (
                 <tr>
-                  <td colSpan={11} className="px-4 py-10 text-center text-gray-500">
+                  <td colSpan={10} className="px-4 py-10 text-center text-gray-500">
                     Loading products…
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="px-4 py-10 text-center text-gray-500">
+                  <td colSpan={10} className="px-4 py-10 text-center text-gray-500">
                     No products match your filters.
                   </td>
                 </tr>
@@ -353,97 +308,33 @@ export default function ProductsPage() {
                 filtered.map((p) => (
                   <tr
                     key={p.id}
-                    className={`border-b border-surface-border last:border-b-0 hover:bg-surface-elevated ${
-                      p.hidden ? 'opacity-60' : ''
-                    }`}
+                    className="border-b border-surface-border last:border-b-0 hover:bg-surface-elevated"
                   >
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
                         <ProductThumb src={p.image} alt={p.name} />
                         <div className="min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            <span className="truncate font-medium text-gray-100">{p.name}</span>
-                            {p.featured && (
-                              <Star
-                                size={12}
-                                className="shrink-0 fill-accent-amber text-accent-amber"
-                              />
-                            )}
-                          </div>
+                          <span className="truncate font-medium text-gray-100">{p.name}</span>
                           <div className="text-xs text-gray-500">SKU · {p.sku}</div>
                         </div>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-gray-300">{p.category}</td>
-                    <td className="px-4 py-3 text-gray-300">{p.brand || '—'}</td>
-                    <td className="px-4 py-3 text-right">
-                      {p.salePrice != null ? (
-                        <div className="flex flex-col items-end">
-                          <span className="font-medium text-gray-100">
-                            {formatPrice(p.salePrice)}
-                          </span>
-                          <span className="text-xs text-gray-500 line-through">
-                            {formatPrice(p.price)}
-                          </span>
-                        </div>
-                      ) : (
-                        <span className="font-medium text-gray-100">{formatPrice(p.price)}</span>
-                      )}
+                    <td className="px-4 py-3 text-gray-300">{p.businessCategoryName || '—'}</td>
+                    <td className="px-4 py-3 text-gray-300">{p.subCategoryName || '—'}</td>
+                    <td className="px-4 py-3 text-gray-300">{p.branchName || '—'}</td>
+                    <td className="px-4 py-3 text-right font-medium text-gray-100">
+                      {formatPrice(p.price)}
                     </td>
-                    <td className="px-4 py-3 text-right">{stockBadge(p)}</td>
-                    <td className="px-4 py-3">
-                      {(() => {
-                        const rating = ratingBySku.get(p.sku)
-                        if (!rating) return <span className="text-gray-600">—</span>
-                        return (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              setReviewsOpenId(p.id)
-                            }}
-                            className="flex flex-col items-start gap-0 rounded-md px-1 py-0.5 hover:bg-surface-elevated"
-                            title="View reviews"
-                          >
-                            <span className="inline-flex items-center gap-1 text-gray-100">
-                              <Star
-                                size={13}
-                                className="fill-accent-amber text-accent-amber"
-                              />
-                              <span className="text-sm font-semibold">
-                                {rating.avg.toFixed(1)}
-                              </span>
-                            </span>
-                            <span className="text-[11px] text-gray-500">
-                              {rating.count} review{rating.count === 1 ? '' : 's'}
-                            </span>
-                          </button>
-                        )
-                      })()}
+                    <td className="px-4 py-3 text-right text-gray-300">
+                      {formatPrice(p.deliveryFee)}
+                    </td>
+                    <td className="px-4 py-3 text-right text-gray-300">
+                      {p.deliveryTime ? `${p.deliveryTime} day${p.deliveryTime === '1' ? '' : 's'}` : '—'}
                     </td>
                     <td className="px-4 py-3">{statusBadge(p.status)}</td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
-                          p.hidden
-                            ? 'bg-gray-500/15 text-gray-400'
-                            : 'bg-accent-success/15 text-accent-success'
-                        }`}
-                      >
-                        {p.hidden ? <EyeOff size={12} /> : <Eye size={12} />}
-                        {p.hidden ? 'Hidden' : 'Visible'}
-                      </span>
-                    </td>
                     <td className="px-4 py-3 text-xs text-gray-400">{formatDateTime(p.createdAt)}</td>
-                    <td className="px-4 py-3 text-xs text-gray-400">{formatDateTime(p.updatedAt)}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">
-                        <IconButton
-                          title={p.hidden ? 'Show on storefront' : 'Hide from storefront'}
-                          onClick={() => toggleHidden(p.id)}
-                        >
-                          {p.hidden ? <Eye size={15} /> : <EyeOff size={15} />}
-                        </IconButton>
                         <IconButton
                           title="Edit"
                           onClick={() => setModal({ mode: 'edit', product: p })}
@@ -473,31 +364,9 @@ export default function ProductsPage() {
         open={modal.mode !== 'closed'}
         mode={modal.mode === 'edit' ? 'edit' : 'add'}
         initial={modal.mode === 'edit' ? modal.product : null}
-        submitting={isCreating}
+        submitting={isCreating || isUpdating}
         onCancel={() => setModal({ mode: 'closed' })}
         onSubmit={handleSubmit}
-      />
-
-      <ReviewsDrawer
-        open={reviewsOpenId !== null}
-        subject={
-          reviewsOpenId
-            ? products.find((p) => p.id === reviewsOpenId)?.name ?? null
-            : null
-        }
-        subjectCode={
-          reviewsOpenId
-            ? products.find((p) => p.id === reviewsOpenId)?.sku ?? null
-            : null
-        }
-        reviews={
-          reviewsOpenId
-            ? reviewsBySku.get(
-                products.find((p) => p.id === reviewsOpenId)?.sku ?? '',
-              ) ?? []
-            : []
-        }
-        onClose={() => setReviewsOpenId(null)}
       />
     </div>
   )

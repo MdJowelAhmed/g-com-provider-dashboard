@@ -1,11 +1,15 @@
-import { useEffect, useState } from 'react'
-import { Modal, Form, Input, InputNumber, Select, Switch, Row, Col, Divider } from 'antd'
+import { useEffect, useMemo, useState } from 'react'
+import { Modal, Form, Input, InputNumber, Select, Row, Col, Divider } from 'antd'
 import ImageUploader from '../../../components/common/ImageUploader'
+import { useGetBusinessCategoriesQuery } from '../../../redux/api/businessCategoryApi'
+import { useGetShopsQuery } from '../../../redux/api/shopManagementApi'
+import { useGetSubCategoriesQuery } from '../../../redux/api/serviceApi'
 import {
   PRODUCT_CATEGORIES,
-  PRODUCT_STATUS_OPTIONS,
   type Product,
 } from './productTypes'
+
+const PRODUCT_PLATFORM_CATEGORY = 'shop'
 
 export type ProductSubmitValues = Omit<Product, 'id' | 'createdAt' | 'updatedAt'> & {
   imageFile: File | null
@@ -35,6 +39,12 @@ const blankValues: FormValues = {
   stock: 0,
   lowStockThreshold: 5,
   weight: null,
+  deliveryMethod: 'external-delivery',
+  deliveryFee: 0,
+  deliveryTime: "",
+  subCategory: '',
+  branch: '',
+  businessCategory: '',
   variants: '',
   tags: '',
   status: 'active',
@@ -53,6 +63,48 @@ export default function ProductFormModal({
   const [form] = Form.useForm<FormValues>()
   const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null)
 
+  const { data: shopsData, isLoading: shopsLoading } = useGetShopsQuery(
+    { page: 1, limit: 100 },
+    { skip: !open },
+  )
+  const { data: categoriesData, isLoading: categoriesLoading } = useGetBusinessCategoriesQuery(
+    undefined,
+    { skip: !open },
+  )
+  const { data: subCategoriesData, isLoading: subCategoriesLoading } = useGetSubCategoriesQuery(
+    { category: PRODUCT_PLATFORM_CATEGORY, page: 1, limit: 100 },
+    { skip: !open },
+  )
+
+  const branchOptions = useMemo(
+    () =>
+      (shopsData?.data ?? []).map((shop) => ({
+        value: shop._id,
+        label: shop.branchName,
+      })),
+    [shopsData?.data],
+  )
+
+  const businessCategoryOptions = useMemo(
+    () =>
+      (categoriesData?.data ?? []).map((category) => ({
+        value: category._id,
+        label: category.name,
+      })),
+    [categoriesData?.data],
+  )
+
+  const subCategoryOptions = useMemo(
+    () =>
+      (subCategoriesData?.data ?? [])
+        .filter((item) => item.status === 'active')
+        .map((item) => ({
+          value: item._id,
+          label: item.name,
+        })),
+    [subCategoriesData?.data],
+  )
+
   useEffect(() => {
     if (!open) return
     if (mode === 'edit' && initial) {
@@ -61,12 +113,23 @@ export default function ProductFormModal({
       void _c
       void _u
       form.setFieldsValue(rest)
-      setSelectedImageFile(null)
     } else {
       form.setFieldsValue(blankValues)
-      setSelectedImageFile(null)
     }
+    setSelectedImageFile(null)
   }, [open, mode, initial, form])
+
+  // Prefill default branch / business category once options load — without
+  // wiping the image or other fields the user already filled in.
+  useEffect(() => {
+    if (!open || mode !== 'add') return
+    if (!form.getFieldValue('branch') && branchOptions[0]) {
+      form.setFieldValue('branch', branchOptions[0].value)
+    }
+    if (!form.getFieldValue('businessCategory') && businessCategoryOptions[0]) {
+      form.setFieldValue('businessCategory', businessCategoryOptions[0].value)
+    }
+  }, [open, mode, form, branchOptions, businessCategoryOptions])
 
   const handleOk = async () => {
     const values = await form.validateFields()
@@ -110,50 +173,84 @@ export default function ProductFormModal({
               <Input placeholder="e.g. Classic Denim Jacket" />
             </Form.Item>
           </Col>
-          <Col span={8}>
-            <Form.Item
-              name="sku"
-              label="SKU"
-              rules={[{ required: true, message: 'SKU is required' }]}
-            >
-              <Input placeholder="DJ-001" />
-            </Form.Item>
-          </Col>
+  
           <Col span={24}>
-            <Form.Item name="image" label="Image">
+            <Form.Item
+              name="image"
+              label="Image"
+              rules={[
+                {
+                  validator: async () => {
+                    const current = form.getFieldValue('image') as string | undefined
+                    if (current?.trim() || selectedImageFile) return
+                    throw new Error('Image is required')
+                  },
+                },
+              ]}
+            >
               <ImageUploader
                 value={form.getFieldValue('image')}
                 autoUpload={false}
                 onFileSelect={(file) => {
                   setSelectedImageFile(file ?? null)
+                  form.setFields([{ name: 'image', errors: [] }])
                 }}
                 onChange={(url) => {
                   form.setFieldValue('image', url)
                 }}
-                hint="Select image (upload হবে Add Product click এ)"
+                hint="Select image — uploads when you click Add product"
                 heightClass="h-40"
               />
             </Form.Item>
           </Col>
-          <Col span={12}>
-            <Form.Item name="brand" label="Brand">
-              <Input placeholder="e.g. Urban Thread" />
-            </Form.Item>
-          </Col>
-          <Col span={12}>
+      
+        </Row>
+
+      
+        <Row gutter={16}>
+          <Col span={8}>
             <Form.Item
-              name="category"
-              label="Category"
-              rules={[{ required: true, message: 'Category is required' }]}
+              name="businessCategory"
+              label="Business category"
+              // rules={[{ required: true, message: 'Select a business category' }]}
             >
               <Select
-                options={PRODUCT_CATEGORIES.map((c) => ({ value: c, label: c }))}
+                showSearch
+                optionFilterProp="label"
+                loading={categoriesLoading}
+                options={businessCategoryOptions}
+                placeholder="Select business category"
               />
             </Form.Item>
           </Col>
-          <Col span={24}>
-            <Form.Item name="description" label="Description">
-              <Input.TextArea rows={3} placeholder="Short description shown on product page" />
+          <Col span={8}>
+            <Form.Item
+              name="subCategory"
+              label="Sub category"
+              // rules={[{ required: true, message: 'Select a sub category' }]}
+            >
+              <Select
+                showSearch
+                optionFilterProp="label"
+                loading={subCategoriesLoading}
+                options={subCategoryOptions}
+                placeholder="Select sub category"
+              />
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item
+              name="branch"
+              label="Branch (shop)"
+              // rules={[{ required: true, message: 'Select a branch' }]}
+            >
+              <Select
+                showSearch
+                optionFilterProp="label"
+                loading={shopsLoading}
+                options={branchOptions}
+                placeholder="Select shop branch"
+              />
             </Form.Item>
           </Col>
         </Row>
@@ -171,73 +268,31 @@ export default function ProductFormModal({
               <InputNumber min={0} step={0.01} style={{ width: '100%' }} />
             </Form.Item>
           </Col>
-          <Col span={8}>
-            <Form.Item name="salePrice" label="Sale price ($)">
-              <InputNumber min={0} step={0.01} style={{ width: '100%' }} placeholder="Optional" />
-            </Form.Item>
-          </Col>
-          <Col span={8}>
-            <Form.Item name="costPrice" label="Cost price ($)">
-              <InputNumber min={0} step={0.01} style={{ width: '100%' }} placeholder="Optional" />
-            </Form.Item>
-          </Col>
-        </Row>
 
-        <Divider titlePlacement="start" orientationMargin={0} plain>
-          Inventory
-        </Divider>
-        <Row gutter={16}>
           <Col span={8}>
             <Form.Item
-              name="stock"
-              label="Stock quantity"
-              rules={[{ required: true, message: 'Stock is required' }]}
+              name="deliveryFee"
+              label="Delivery fee ($)"
+              rules={[{ required: true, message: 'Delivery fee is required' }]}
+            >
+              <InputNumber min={0} step={0.01} style={{ width: '100%' }} />
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item
+              name="deliveryTime"
+              label="Delivery time (days)"
+              rules={[{ required: true, message: 'Delivery time is required' }]}
             >
               <InputNumber min={0} style={{ width: '100%' }} />
             </Form.Item>
           </Col>
-          <Col span={8}>
-            <Form.Item name="lowStockThreshold" label="Low stock alert at">
-              <InputNumber min={0} style={{ width: '100%' }} />
-            </Form.Item>
-          </Col>
-          <Col span={8}>
-            <Form.Item name="weight" label="Weight (g)">
-              <InputNumber min={0} style={{ width: '100%' }} placeholder="For shipping" />
-            </Form.Item>
-          </Col>
         </Row>
 
-        <Divider titlePlacement="start" orientationMargin={0} plain>
-          Organization
-        </Divider>
-        <Row gutter={16}>
-          <Col span={12}>
-            <Form.Item name="variants" label="Variants" help="Comma separated (e.g. S, M, L)">
-              <Input placeholder="S, M, L, XL" />
-            </Form.Item>
-          </Col>
-          <Col span={12}>
-            <Form.Item name="tags" label="Tags" help="Comma separated">
-              <Input placeholder="denim, jacket, unisex" />
-            </Form.Item>
-          </Col>
-          <Col span={8}>
-            <Form.Item name="status" label="Status">
-              <Select options={PRODUCT_STATUS_OPTIONS} />
-            </Form.Item>
-          </Col>
-          <Col span={8}>
-            <Form.Item name="featured" label="Featured" valuePropName="checked">
-              <Switch />
-            </Form.Item>
-          </Col>
-          <Col span={8}>
-            <Form.Item name="hidden" label="Hidden from storefront" valuePropName="checked">
-              <Switch />
-            </Form.Item>
-          </Col>
-        </Row>
+     
+
+     
+      
       </Form>
     </Modal>
   )

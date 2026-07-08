@@ -56,16 +56,13 @@ export interface GetProductsParams {
 export interface ProductPayload {
   name: string
   price: number
-  deliveryMethod: string
   deliveryFee: number
-  deliveryTime: number
+  deliveryTime: string
   image: string
   description: string
   subCategory?: string
   branch?: string
   businessCategory?: string
-  sku?: string
-  status?: ProductStatus
 }
 
 export interface ProductMutationResponse {
@@ -109,7 +106,7 @@ const productsApi = baseApi.injectEndpoints({
     }),
     deleteProduct: builder.mutation<ProductMutationResponse, string>({
       query: (id) => ({
-        url: `/products/${id}`,
+        url: `/products/${id}/soft-delete`,
         method: 'DELETE',
       }),
       invalidatesTags: ['Products'],

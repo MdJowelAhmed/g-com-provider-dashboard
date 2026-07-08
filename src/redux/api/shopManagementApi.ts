@@ -112,7 +112,7 @@ const shopManagementApi = baseApi.injectEndpoints({
     }),
     getShops: builder.query<ShopsListResponse, GetShopsParams | undefined>({
       query: (params = {}) => ({
-        url: '/business-branches',
+        url: '/business-branches/mine',
         method: 'GET',
         params,
       }),

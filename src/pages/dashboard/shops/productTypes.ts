@@ -1,5 +1,7 @@
 export type ProductStatus = 'active' | 'draft' | 'archived'
 
+export type DeliveryMethod = 'in-house-delivery' | 'external-delivery' | 'pickup'
+
 export type Product = {
   id: string
   image: string
@@ -14,6 +16,15 @@ export type Product = {
   stock: number
   lowStockThreshold: number
   weight?: number | null
+  deliveryMethod: DeliveryMethod
+  deliveryFee: number
+  deliveryTime: string
+  subCategory?: string
+  subCategoryName?: string
+  branch?: string
+  branchName?: string
+  businessCategory?: string
+  businessCategoryName?: string
   variants: string
   tags: string
   status: ProductStatus
@@ -41,6 +52,12 @@ export const PRODUCT_STATUS_OPTIONS: { value: ProductStatus; label: string }[] =
   { value: 'archived', label: 'Archived' },
 ]
 
+export const DELIVERY_METHOD_OPTIONS: { value: DeliveryMethod; label: string }[] = [
+  { value: 'in-house-delivery', label: 'In-house delivery' },
+  { value: 'external-delivery', label: 'External delivery' },
+  { value: 'pickup', label: 'Pickup' },
+]
+
 export const INITIAL_PRODUCTS: Product[] = [
   {
     id: 'p_1001',
@@ -57,6 +74,9 @@ export const INITIAL_PRODUCTS: Product[] = [
     stock: 24,
     lowStockThreshold: 5,
     weight: 680,
+    deliveryMethod: 'external-delivery',
+    deliveryFee: 5,
+    deliveryTime: "3 days",
     variants: 'S, M, L, XL',
     tags: 'denim, jacket, unisex',
     status: 'active',
@@ -80,6 +100,9 @@ export const INITIAL_PRODUCTS: Product[] = [
     stock: 8,
     lowStockThreshold: 10,
     weight: 310,
+    deliveryMethod: 'external-delivery',
+    deliveryFee: 0,
+    deliveryTime: "2 days",
     variants: 'Black, White, Sand',
     tags: 'audio, wireless, anc',
     status: 'active',
@@ -103,6 +126,9 @@ export const INITIAL_PRODUCTS: Product[] = [
     stock: 40,
     lowStockThreshold: 8,
     weight: 90,
+    deliveryMethod: 'pickup',
+    deliveryFee: 0,
+    deliveryTime: "1 day",
     variants: 'Brown, Black',
     tags: 'wallet, leather, men',
     status: 'active',
@@ -126,6 +152,9 @@ export const INITIAL_PRODUCTS: Product[] = [
     stock: 0,
     lowStockThreshold: 6,
     weight: 540,
+    deliveryMethod: 'in-house-delivery',
+    deliveryFee: 3,
+    deliveryTime: "2 days",
     variants: '39, 40, 41, 42, 43, 44',
     tags: 'running, shoes, mens',
     status: 'active',
@@ -149,6 +178,9 @@ export const INITIAL_PRODUCTS: Product[] = [
     stock: 120,
     lowStockThreshold: 20,
     weight: 340,
+    deliveryMethod: 'external-delivery',
+    deliveryFee: 4,
+    deliveryTime: "5 days",
     variants: 'Ivory, Charcoal, Sage',
     tags: 'mug, coffee, ceramic',
     status: 'draft',

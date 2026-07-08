@@ -83,5 +83,4 @@ export type ServiceFormValues = {
 export const PRICING_TYPE_OPTIONS: { value: PricingType; label: string }[] = [
   { value: 'fixed', label: 'Fixed price' },
   { value: 'per_hour', label: 'Per hour' },
-  { value: 'request_a_quote', label: 'Request a quote' },
 ]

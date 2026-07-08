@@ -197,10 +197,6 @@ export default function ServiceFormDrawer({
     }
   }, [open, platformCategory, subCategoryOptions, subCategoriesLoading, form])
 
-  const handlePlatformCategoryChange = () => {
-    form.setFieldValue('subCategory', '')
-  }
-
   const handleOk = async () => {
     const values = await form.validateFields()
 
@@ -316,7 +312,7 @@ export default function ServiceFormDrawer({
             <Form.Item
               name="businessCategory"
               label="Business category"
-              rules={[{ required: true, message: 'Select a business category' }]}
+              // rules={[{ required: true, message: 'Select a business category' }]}
             >
               <Select
                 showSearch
@@ -331,20 +327,16 @@ export default function ServiceFormDrawer({
             <Form.Item
               name="platformCategory"
               label="Category"
-              rules={[{ required: true, message: 'Select a category' }]}
+              rules={[{ required: true, message: 'Category is required' }]}
             >
-              <Select
-                options={PLATFORM_CATEGORY_OPTIONS}
-                placeholder="Select category"
-                onChange={handlePlatformCategoryChange}
-              />
+              <Select options={PLATFORM_CATEGORY_OPTIONS} disabled />
             </Form.Item>
           </Col>
           <Col span={12}>
             <Form.Item
               name="subCategory"
               label="Sub category"
-              rules={[{ required: true, message: 'Select a sub category' }]}
+              // rules={[{ required: true, message: 'Select a sub category' }]}
             >
               <Select
                 showSearch
