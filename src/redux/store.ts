@@ -12,6 +12,7 @@ import './api/myBookingApi'
 import './api/dashboardApi'
 import './api/earningsPayoutApi'
 import './api/notificationApi'
+import './api/productsApi'
 import authReducer from './slice/authSlice'
 
 export const store = configureStore({

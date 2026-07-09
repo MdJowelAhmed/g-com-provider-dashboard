@@ -1,77 +1,126 @@
-import { useEffect } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Drawer,
   Form,
   Input,
   InputNumber,
   Select,
-  Switch,
   Row,
   Col,
   Divider,
   Button,
   Space,
 } from 'antd'
-import {
-  MENU_CATEGORIES,
-  MENU_STATUS_OPTIONS,
-  DIETARY_OPTIONS,
-  SPICY_LEVEL_OPTIONS,
-  type MenuItem,
-} from './menuTypes'
+import ImageUploader from '../../../components/common/ImageUploader'
+import { useGetBusinessCategoriesQuery } from '../../../redux/api/businessCategoryApi'
+import { useGetShopsQuery } from '../../../redux/api/shopManagementApi'
+import { useGetSubCategoriesQuery } from '../../../redux/api/serviceApi'
+import type { MenuFormValues, MenuItem } from './menuTypes'
+import { menuItemToFormValues } from './menuMapping'
+
+const MENU_PLATFORM_CATEGORY = 'dine'
 
 type Props = {
   open: boolean
   mode: 'add' | 'edit'
   initial?: MenuItem | null
+  submitting?: boolean
   onCancel: () => void
-  onSubmit: (values: Omit<MenuItem, 'id' | 'createdAt'>) => void
+  onSubmit: (values: MenuFormValues) => void | Promise<void>
 }
 
-type FormValues = Omit<MenuItem, 'id' | 'createdAt'>
+type FormValues = Omit<MenuFormValues, 'imageFile'>
 
 const blankValues: FormValues = {
   image: '',
   name: '',
-  code: '',
-  category: MENU_CATEGORIES[0],
-  shortDescription: '',
-
+  description: '',
   price: 0,
-  salePrice: null,
-
-  portionSize: '',
-
-  dietary: 'vegetarian',
-  spicyLevel: 'none',
-
-  bestSeller: false,
-  isNew: false,
-
-  status: 'active',
-  hidden: false,
+  deliveryFee: 0,
+  deliveryTime: '',
+  subCategory: '',
+  branch: '',
+  businessCategory: '',
 }
 
-export default function MenuFormDrawer({ open, mode, initial, onCancel, onSubmit }: Props) {
+export default function MenuFormDrawer({
+  open,
+  mode,
+  initial,
+  submitting = false,
+  onCancel,
+  onSubmit,
+}: Props) {
   const [form] = Form.useForm<FormValues>()
+  const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null)
+
+  const { data: shopsData, isLoading: shopsLoading } = useGetShopsQuery(
+    { page: 1, limit: 100 },
+    { skip: !open },
+  )
+  const { data: categoriesData, isLoading: categoriesLoading } = useGetBusinessCategoriesQuery(
+    undefined,
+    { skip: !open },
+  )
+  const { data: subCategoriesData, isLoading: subCategoriesLoading } = useGetSubCategoriesQuery(
+    { category: MENU_PLATFORM_CATEGORY, page: 1, limit: 100 },
+    { skip: !open },
+  )
+
+  const branchOptions = useMemo(
+    () =>
+      (shopsData?.data ?? []).map((shop) => ({
+        value: shop._id,
+        label: shop.branchName,
+      })),
+    [shopsData?.data],
+  )
+
+  const businessCategoryOptions = useMemo(
+    () =>
+      (categoriesData?.data ?? []).map((category) => ({
+        value: category._id,
+        label: category.name,
+      })),
+    [categoriesData?.data],
+  )
+
+  const subCategoryOptions = useMemo(
+    () =>
+      (subCategoriesData?.data ?? [])
+        .filter((item) => item.status === 'active')
+        .map((item) => ({
+          value: item._id,
+          label: item.name,
+        })),
+    [subCategoriesData?.data],
+  )
 
   useEffect(() => {
     if (!open) return
     if (mode === 'edit' && initial) {
-      const { id: _id, createdAt: _c, ...rest } = initial
-      void _id
-      void _c
-      form.setFieldsValue(rest)
+      form.setFieldsValue(menuItemToFormValues(initial))
     } else {
       form.setFieldsValue(blankValues)
     }
+    setSelectedImageFile(null)
   }, [open, mode, initial, form])
+
+  useEffect(() => {
+    if (!open || mode !== 'add') return
+    if (!form.getFieldValue('branch') && branchOptions[0]) {
+      form.setFieldValue('branch', branchOptions[0].value)
+    }
+    if (!form.getFieldValue('businessCategory') && businessCategoryOptions[0]) {
+      form.setFieldValue('businessCategory', businessCategoryOptions[0].value)
+    }
+  }, [open, mode, form, branchOptions, businessCategoryOptions])
 
   const handleOk = async () => {
     const values = await form.validateFields()
     onSubmit({
       ...values,
-      salePrice: values.salePrice ?? null,
+      imageFile: selectedImageFile,
     })
   }
 
@@ -80,29 +129,26 @@ export default function MenuFormDrawer({ open, mode, initial, onCancel, onSubmit
       open={open}
       title={mode === 'edit' ? 'Edit menu item' : 'Add menu item'}
       onClose={onCancel}
-      width={680}
+      width={720}
       placement="right"
       destroyOnHidden
       footer={
         <Space style={{ display: 'flex', justifyContent: 'flex-end', width: '100%' }}>
-          <Button onClick={onCancel}>Cancel</Button>
-          <Button type="primary" onClick={handleOk}>
+          <Button onClick={onCancel} disabled={submitting}>
+            Cancel
+          </Button>
+          <Button type="primary" onClick={handleOk} loading={submitting}>
             {mode === 'edit' ? 'Save changes' : 'Add item'}
           </Button>
         </Space>
       }
     >
-      <Form
-        form={form}
-        layout="vertical"
-        initialValues={blankValues}
-        requiredMark="optional"
-      >
+      <Form form={form} layout="vertical" initialValues={blankValues} requiredMark="optional">
         <Divider titlePlacement="start" orientationMargin={0} plain>
           Basic info
         </Divider>
         <Row gutter={16}>
-          <Col span={16}>
+          <Col span={24}>
             <Form.Item
               name="name"
               label="Item name"
@@ -111,57 +157,91 @@ export default function MenuFormDrawer({ open, mode, initial, onCancel, onSubmit
               <Input placeholder="e.g. Chicken Biryani" />
             </Form.Item>
           </Col>
-          <Col span={8}>
-            <Form.Item
-              name="code"
-              label="Item code"
-              rules={[{ required: true, message: 'Code is required' }]}
-            >
-              <Input placeholder="MAI-CB" />
-            </Form.Item>
-          </Col>
-          <Col span={12}>
-            <Form.Item
-              name="category"
-              label="Category"
-              rules={[{ required: true, message: 'Category is required' }]}
-            >
-              <Select options={MENU_CATEGORIES.map((c) => ({ value: c, label: c }))} />
-            </Form.Item>
-          </Col>
-          <Col span={12}>
-            <Form.Item
-              name="portionSize"
-              label="Portion"
-              rules={[{ required: true, message: 'Portion is required' }]}
-            >
-              <Input placeholder="e.g. 6 pieces, 250g, Full plate, 12 inch" />
-            </Form.Item>
-          </Col>
           <Col span={24}>
-            <Form.Item name="image" label="Cover image URL">
-              <Input placeholder="https://..." />
+            <Form.Item
+              name="description"
+              label="Description"
+              rules={[{ required: true, message: 'Description is required' }]}
+            >
+              <Input.TextArea rows={3} placeholder="Describe the dish" />
             </Form.Item>
           </Col>
           <Col span={24}>
             <Form.Item
-              name="shortDescription"
-              label="Short description"
-              help="One line shown on the menu card"
+              name="image"
+              label="Image"
+              rules={[
+                {
+                  validator: async () => {
+                    const current = form.getFieldValue('image') as string | undefined
+                    if (current?.trim() || selectedImageFile) return
+                    throw new Error('Image is required')
+                  },
+                },
+              ]}
             >
-              <Input
-                placeholder="Char-grilled cottage cheese marinated in yogurt and spices."
-                maxLength={140}
+              <ImageUploader
+                value={form.getFieldValue('image')}
+                autoUpload={false}
+                onFileSelect={(file) => {
+                  setSelectedImageFile(file ?? null)
+                  form.setFields([{ name: 'image', errors: [] }])
+                }}
+                onChange={(url) => form.setFieldValue('image', url)}
+                hint="Select image — uploads when you save the item"
+                heightClass="h-40"
               />
             </Form.Item>
           </Col>
         </Row>
 
         <Divider titlePlacement="start" orientationMargin={0} plain>
-          Pricing
+          Classification
         </Divider>
         <Row gutter={16}>
-          <Col span={12}>
+          <Col span={8}>
+            <Form.Item name="businessCategory" label="Business category">
+              <Select
+                showSearch
+                allowClear
+                optionFilterProp="label"
+                loading={categoriesLoading}
+                options={businessCategoryOptions}
+                placeholder="Select business category"
+              />
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item name="subCategory" label="Sub category">
+              <Select
+                showSearch
+                allowClear
+                optionFilterProp="label"
+                loading={subCategoriesLoading}
+                options={subCategoryOptions}
+                placeholder="Select sub category"
+              />
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item name="branch" label="Branch">
+              <Select
+                showSearch
+                allowClear
+                optionFilterProp="label"
+                loading={shopsLoading}
+                options={branchOptions}
+                placeholder="Select branch"
+              />
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Divider titlePlacement="start" orientationMargin={0} plain>
+          Pricing & delivery
+        </Divider>
+        <Row gutter={16}>
+          <Col span={8}>
             <Form.Item
               name="price"
               label="Price ($)"
@@ -170,64 +250,22 @@ export default function MenuFormDrawer({ open, mode, initial, onCancel, onSubmit
               <InputNumber min={0} step={0.01} style={{ width: '100%' }} />
             </Form.Item>
           </Col>
-          <Col span={12}>
-            <Form.Item name="salePrice" label="Sale price ($)">
-              <InputNumber
-                min={0}
-                step={0.01}
-                style={{ width: '100%' }}
-                placeholder="Optional"
-              />
-            </Form.Item>
-          </Col>
-        </Row>
-
-        <Divider titlePlacement="start" orientationMargin={0} plain>
-          Dietary
-        </Divider>
-        <Row gutter={16}>
-          <Col span={12}>
+          <Col span={8}>
             <Form.Item
-              name="dietary"
-              label="Food type"
-              rules={[{ required: true, message: 'Food type is required' }]}
+              name="deliveryFee"
+              label="Delivery fee ($)"
+              rules={[{ required: true, message: 'Delivery fee is required' }]}
             >
-              <Select options={DIETARY_OPTIONS} />
+              <InputNumber min={0} step={0.01} style={{ width: '100%' }} />
             </Form.Item>
           </Col>
-          <Col span={12}>
+          <Col span={8}>
             <Form.Item
-              name="spicyLevel"
-              label="Spicy level"
-              rules={[{ required: true, message: 'Spicy level is required' }]}
+              name="deliveryTime"
+              label="Delivery time (days)"
+              rules={[{ required: true, message: 'Delivery time is required' }]}
             >
-              <Select options={SPICY_LEVEL_OPTIONS} />
-            </Form.Item>
-          </Col>
-        </Row>
-
-        <Divider titlePlacement="start" orientationMargin={0} plain>
-          Highlights & visibility
-        </Divider>
-        <Row gutter={16}>
-          <Col span={12}>
-            <Form.Item name="bestSeller" label="Best seller" valuePropName="checked">
-              <Switch />
-            </Form.Item>
-          </Col>
-          <Col span={12}>
-            <Form.Item name="isNew" label="New item" valuePropName="checked">
-              <Switch />
-            </Form.Item>
-          </Col>
-          <Col span={12}>
-            <Form.Item name="status" label="Status">
-              <Select options={MENU_STATUS_OPTIONS} />
-            </Form.Item>
-          </Col>
-          <Col span={12}>
-            <Form.Item name="hidden" label="Hidden from menu" valuePropName="checked">
-              <Switch />
+              <InputNumber min={0} style={{ width: '100%' }} />
             </Form.Item>
           </Col>
         </Row>

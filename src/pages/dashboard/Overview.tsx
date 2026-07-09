@@ -253,13 +253,13 @@ export default function Overview() {
           </div>
 
           <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
-            <div className="rounded-xl border border-surface-border bg-surface-card p-5 lg:col-span-2">
+            <div className="rounded-xl border border-surface-border bg-surface-card p-5 lg:col-span-3">
               <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <div className="text-sm font-semibold text-gray-100">{ui.chartTitle}</div>
                   <div className="text-xs text-gray-400">{year} monthly revenue</div>
                 </div>
-                <div className="flex items-center gap-4 text-sm">
+                {/* <div className="flex items-center gap-4 text-sm">
                   <Metric label={ui.primaryMetricLabel} value={formatMoney(yearRevenue)} />
                   <Metric
                     label="Completed"
@@ -269,7 +269,7 @@ export default function Overview() {
                     label={ui.tertiaryMetricLabel}
                     value={formatMoney(avgOrderValue)}
                   />
-                </div>
+                </div> */}
               </div>
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
@@ -322,7 +322,7 @@ export default function Overview() {
               </div>
             </div>
 
-            <div className="rounded-xl border border-surface-border bg-surface-card p-5">
+            {/* <div className="rounded-xl border border-surface-border bg-surface-card p-5">
               <div className="mb-1 text-sm font-semibold text-gray-100">Status breakdown</div>
               <div className="mb-3 text-xs text-gray-400">
                 {totalStatus} {ui.statusRecordsHint}
@@ -385,7 +385,7 @@ export default function Overview() {
                   </div>
                 </div>
               )}
-            </div>
+            </div> */}
             {/* <PayoutCard role={dashboardRole} /> */}
           </div>
 
