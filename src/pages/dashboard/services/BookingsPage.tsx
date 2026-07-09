@@ -163,13 +163,13 @@ export default function BookingsPage() {
     <div>
       <PageHeader title={copy.title} description={copy.description} />
 
-      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
+      {/* <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
         <SummaryTile label="Total" value={totals.total} tone="neutral" />
         <SummaryTile label="Pending" value={totals.pending} tone="warning" />
         <SummaryTile label="Paid" value={totals.paid} tone="success" />
         <SummaryTile label="Completed" value={totals.completed} tone="info" />
         <SummaryTile label="Revenue" value={formatMoney(totals.revenue)} tone="success" compact />
-      </div>
+      </div> */}
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <div className="relative min-w-[240px] flex-1">
@@ -182,7 +182,7 @@ export default function BookingsPage() {
             placeholder={copy.searchPlaceholder}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="h-10 w-full rounded-md border border-surface-border bg-surface-card pl-9 pr-3 text-sm text-gray-100 placeholder:text-gray-500 focus:border-brand focus:outline-none"
+            className="h-10 w-[300px] rounded-md border border-surface-border bg-surface-card pl-9 pr-3 text-sm text-gray-100 placeholder:text-gray-500 focus:border-brand focus:outline-none"
           />
         </div>
         <select

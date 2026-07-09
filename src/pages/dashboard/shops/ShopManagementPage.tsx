@@ -133,24 +133,24 @@ export default function ShopManagementPage() {
       <PageHeader
         title="Shop Management"
         description="Manage your business branches — locations, contact details, and opening hours."
-        actions={
-          <button
-            type="button"
-            onClick={() => setModal({ mode: 'add' })}
-            className="flex h-10 items-center gap-1.5 rounded-md bg-brand px-4 text-sm font-medium text-white hover:bg-brand-hover"
-          >
-            <Plus size={16} /> Add branch
-          </button>
-        }
+        // actions={
+        //   <button
+        //     type="button"
+        //     onClick={() => setModal({ mode: 'add' })}
+        //     className="flex h-10 items-center gap-1.5 rounded-md bg-brand px-4 text-sm font-medium text-white hover:bg-brand-hover"
+        //   >
+        //     <Plus size={16} /> Add branch
+        //   </button>
+        // }
       />
-
+{/* 
       <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
         <SummaryTile label="Total branches" value={totals.total} tone="neutral" />
         <SummaryTile label="With hours set" value={totals.withHours} tone="success" />
         <SummaryTile label="With open days" value={totals.withDays} tone="warning" />
-      </div>
+      </div> */}
 
-      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <div className="mb-4 flex items-center justify-end w-full gap-2">
         <div className="relative min-w-[220px] flex-1">
           <Search
             size={14}
@@ -161,10 +161,17 @@ export default function ShopManagementPage() {
             placeholder="Search by name, contact, location, or description"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="h-10 w-full rounded-md border border-surface-border bg-surface-card pl-9 pr-3 text-sm text-gray-100 placeholder:text-gray-500 focus:border-brand focus:outline-none"
+            className="h-10 w-[300px] rounded-md border border-surface-border bg-surface-card pl-9 pr-3 text-sm text-gray-100 placeholder:text-gray-500 focus:border-brand focus:outline-none"
           />
         </div>
-      </div>
+        <button
+            type="button"
+            onClick={() => setModal({ mode: 'add' })}
+            className="flex h-10 items-center gap-1.5 rounded-md bg-brand px-4 text-sm font-medium text-white hover:bg-brand-hover"
+          >
+            <Plus size={16} /> Add branch
+          </button>
+        </div> 
 
       <div className="overflow-hidden rounded-xl border border-surface-border bg-surface-card">
         <div className="overflow-x-auto">
