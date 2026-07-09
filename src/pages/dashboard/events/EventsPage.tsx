@@ -1,63 +1,33 @@
 import { useMemo, useState } from 'react'
-import {
-  Plus,
-  Search,
-  Pencil,
-  Trash2,
-  Eye,
-  EyeOff,
-  Star,
-  ImageOff,
-  Calendar,
-  Clock,
-  MapPin,
-  Users,
-  Globe,
-} from 'lucide-react'
-import { Modal } from 'antd'
+import { Plus, Search, Pencil, Trash2, ImageOff, Calendar, Users } from 'lucide-react'
+import { Modal, message } from 'antd'
+import type { FetchBaseQueryError } from '@reduxjs/toolkit/query'
 import PageHeader from '../../../components/dashboard/PageHeader'
 import EventFormDrawer from './EventFormDrawer'
+import { EVENT_STATUS_OPTIONS, type Event, type EventFormValues } from './eventTypes'
+import { formValuesToEventPayload, mapEventFromApi } from './eventMapping'
 import {
-  INITIAL_EVENTS,
-  EVENT_CATEGORIES,
-  EVENT_TYPE_OPTIONS,
-  EVENT_LIFECYCLE_STATUS_OPTIONS,
-  EVENT_PUBLISH_STATUS_OPTIONS,
-  type Event,
-  type EventType,
-  type EventLifecycleStatus,
-  type EventPublishStatus,
-} from './eventTypes'
+  useCreateEventMutation,
+  useDeleteEventMutation,
+  useGetEventsQuery,
+  useUpdateEventMutation,
+} from '../../../redux/api/eventApi'
 
 type ModalState = { mode: 'closed' } | { mode: 'add' } | { mode: 'edit'; event: Event }
 
 const allFilter = '__all__'
 
-const lifecycleToneClass: Record<EventLifecycleStatus, string> = {
-  scheduled: 'bg-blue-500/15 text-blue-400',
-  in_progress: 'bg-brand/20 text-brand-cream',
-  completed: 'bg-accent-success/15 text-accent-success',
-  cancelled: 'bg-accent-danger/15 text-accent-danger',
-  postponed: 'bg-accent-amber/15 text-accent-amber',
-}
-
-const publishToneClass: Record<EventPublishStatus, string> = {
-  draft: 'bg-gray-500/20 text-gray-300',
-  active: 'bg-accent-success/15 text-accent-success',
-  archived: 'bg-accent-danger/15 text-accent-danger',
-}
-
-const typeToneClass: Record<EventType, string> = {
-  in_person: 'bg-brand/20 text-brand-cream',
-  online: 'bg-blue-500/15 text-blue-400',
-  hybrid: 'bg-accent-amber/15 text-accent-amber',
-}
-
-function makeId() {
-  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
-    return `e_${crypto.randomUUID().slice(0, 8)}`
+function getApiErrorMessage(error: unknown, fallback: string) {
+  if (error && typeof error === 'object' && 'data' in error) {
+    const data = (error as FetchBaseQueryError).data
+    if (data && typeof data === 'object') {
+      const payload = data as { message?: unknown; errorMessages?: { message?: string }[] }
+      if (typeof payload.message === 'string' && payload.message.trim()) return payload.message
+      const first = payload.errorMessages?.[0]?.message
+      if (first?.trim()) return first
+    }
   }
-  return `e_${Date.now().toString(36)}`
+  return fallback
 }
 
 function formatPrice(n: number | null | undefined) {
@@ -65,138 +35,100 @@ function formatPrice(n: number | null | undefined) {
   return `$${n.toFixed(0)}`
 }
 
-function formatDate(iso: string) {
-  if (!iso) return '—'
-  return new Date(iso).toLocaleDateString(undefined, {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  })
+function formatDateTime(value: string | null | undefined) {
+  if (!value) return '—'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '—'
+  return date.toLocaleString()
 }
 
-function formatTime(iso: string) {
-  if (!iso) return '—'
-  return new Date(iso).toLocaleTimeString(undefined, {
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
-
-function durationLabel(startIso: string, endIso: string) {
-  if (!startIso || !endIso) return ''
-  const start = new Date(startIso).getTime()
-  const end = new Date(endIso).getTime()
-  if (isNaN(start) || isNaN(end)) return ''
-  const mins = Math.max(0, Math.round((end - start) / 60000))
-  const h = Math.floor(mins / 60)
-  const m = mins % 60
-  if (h && m) return `${h}h ${m}m`
-  if (h) return `${h}h`
-  return `${m}m`
-}
-
-function lifecycleLabel(s: EventLifecycleStatus) {
-  return EVENT_LIFECYCLE_STATUS_OPTIONS.find((o) => o.value === s)?.label ?? s
-}
-
-function publishLabel(s: EventPublishStatus) {
-  return EVENT_PUBLISH_STATUS_OPTIONS.find((o) => o.value === s)?.label ?? s
-}
-
-function typeLabel(t: EventType) {
-  return EVENT_TYPE_OPTIONS.find((o) => o.value === t)?.label ?? t
-}
-
-function typeIcon(t: EventType) {
-  if (t === 'online') return <Globe size={10} />
-  if (t === 'hybrid') return <Globe size={10} />
-  return <MapPin size={10} />
+function statusBadge(status: string) {
+  const isActive = status === 'active'
+  return (
+    <span
+      className={`rounded-full px-2 py-0.5 text-xs font-medium capitalize ${
+        isActive ? 'bg-accent-success/15 text-accent-success' : 'bg-gray-600/30 text-gray-400'
+      }`}
+    >
+      {status}
+    </span>
+  )
 }
 
 export default function EventsPage() {
-  const [events, setEvents] = useState<Event[]>(INITIAL_EVENTS)
   const [modal, setModal] = useState<ModalState>({ mode: 'closed' })
   const [search, setSearch] = useState('')
-  const [categoryFilter, setCategoryFilter] = useState<string>(allFilter)
-  const [typeFilter, setTypeFilter] = useState<string>(allFilter)
   const [statusFilter, setStatusFilter] = useState<string>(allFilter)
+
+  const { data, isLoading, isFetching, isError } = useGetEventsQuery({ page: 1, limit: 100 })
+  const [createEvent, { isLoading: isCreating }] = useCreateEventMutation()
+  const [updateEvent, { isLoading: isUpdating }] = useUpdateEventMutation()
+  const [deleteEvent] = useDeleteEventMutation()
+
+  const events = useMemo(() => (data?.data ?? []).map((doc) => mapEventFromApi(doc)), [data?.data])
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
-    return events
-      .filter((e) => {
-        if (categoryFilter !== allFilter && e.category !== categoryFilter) return false
-        if (typeFilter !== allFilter && e.eventType !== typeFilter) return false
-        if (statusFilter !== allFilter && e.status !== statusFilter) return false
-        if (!q) return true
-        return (
-          e.name.toLowerCase().includes(q) ||
-          e.code.toLowerCase().includes(q) ||
-          e.category.toLowerCase().includes(q) ||
-          e.tags.toLowerCase().includes(q) ||
-          e.venueName.toLowerCase().includes(q) ||
-          e.venueCity.toLowerCase().includes(q)
-        )
-      })
-      .sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime())
-  }, [events, search, categoryFilter, typeFilter, statusFilter])
+    return events.filter((event) => {
+      if (statusFilter !== allFilter && event.status !== statusFilter) return false
+      if (!q) return true
+      return (
+        event.name.toLowerCase().includes(q) ||
+        (event.organizerName ?? '').toLowerCase().includes(q) ||
+        (event.branchName ?? '').toLowerCase().includes(q)
+      )
+    })
+  }, [events, search, statusFilter])
 
   const totals = useMemo(() => {
-    const now = Date.now()
-    const upcoming = events.filter(
-      (e) => new Date(e.startAt).getTime() > now && e.status === 'scheduled',
-    ).length
-    const inProgress = events.filter((e) => e.status === 'in_progress').length
-    const nearCapacity = events.filter(
-      (e) => e.maxCapacity > 0 && e.bookedCount / e.maxCapacity >= 0.85,
-    ).length
-    const totalAttendees = events.reduce((sum, e) => sum + e.bookedCount, 0)
-    const revenue = events
-      .filter((e) => e.pricingType === 'paid')
-      .reduce((sum, e) => sum + e.price * e.bookedCount, 0)
-    return {
-      total: events.length,
-      upcoming,
-      inProgress,
-      nearCapacity,
-      totalAttendees,
-      revenue,
-    }
+    const active = events.filter((event) => event.status === 'active').length
+    const booked = events.reduce((sum, event) => sum + event.bookedCapacity, 0)
+    const capacity = events.reduce((sum, event) => sum + event.maxCapacity, 0)
+    return { total: events.length, active, booked, capacity }
   }, [events])
 
-  const handleSubmit = (values: Omit<Event, 'id' | 'createdAt'>) => {
-    if (modal.mode === 'edit') {
-      setEvents((prev) =>
-        prev.map((e) => (e.id === modal.event.id ? { ...e, ...values } : e)),
-      )
-    } else if (modal.mode === 'add') {
-      const next: Event = {
-        ...values,
-        id: makeId(),
-        createdAt: new Date().toISOString(),
+  const handleSubmit = async (values: EventFormValues) => {
+    const payload = formValuesToEventPayload(values)
+    try {
+      if (modal.mode === 'edit') {
+        await updateEvent({ id: modal.event.id, body: payload }).unwrap()
+        message.success('Event updated')
+      } else if (modal.mode === 'add') {
+        await createEvent(payload).unwrap()
+        message.success('Event created')
       }
-      setEvents((prev) => [next, ...prev])
+      setModal({ mode: 'closed' })
+    } catch (error) {
+      message.error(
+        getApiErrorMessage(
+          error,
+          modal.mode === 'edit' ? 'Failed to update event' : 'Failed to create event',
+        ),
+      )
+      throw error
     }
-    setModal({ mode: 'closed' })
   }
 
-  const toggleHidden = (id: string) => {
-    setEvents((prev) => prev.map((e) => (e.id === id ? { ...e, hidden: !e.hidden } : e)))
-  }
-
-  const confirmDelete = (ev: Event) => {
+  const confirmDelete = (event: Event) => {
     Modal.confirm({
       title: 'Delete event?',
       content: (
         <span>
-          Delete <b>{ev.name}</b>? This can't be undone.
+          Delete <b>{event.name}</b>? This can&apos;t be undone.
         </span>
       ),
       okText: 'Delete',
       okButtonProps: { danger: true },
       cancelText: 'Cancel',
       centered: true,
-      onOk: () => setEvents((prev) => prev.filter((x) => x.id !== ev.id)),
+      onOk: async () => {
+        try {
+          await deleteEvent(event.id).unwrap()
+          message.success('Event deleted')
+        } catch (error) {
+          message.error(getApiErrorMessage(error, 'Failed to delete event'))
+        }
+      },
     })
   }
 
@@ -204,7 +136,7 @@ export default function EventsPage() {
     <div>
       <PageHeader
         title="Events"
-        description="Create and manage events — schedule, capacity, pricing, and visibility."
+        description="Create and manage events — schedule, capacity, and ticket pricing."
         actions={
           <button
             type="button"
@@ -216,220 +148,130 @@ export default function EventsPage() {
         }
       />
 
-      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <SummaryTile label="Total" value={totals.total} tone="neutral" />
-        <SummaryTile label="Upcoming" value={totals.upcoming} tone="info" />
-        <SummaryTile label="In progress" value={totals.inProgress} tone="brand" />
-        <SummaryTile label="Near capacity" value={totals.nearCapacity} tone="warning" />
-        <SummaryTile label="Attendees" value={totals.totalAttendees} tone="success" />
-        <SummaryTile
-          label="Revenue"
-          value={`$${totals.revenue.toFixed(0)}`}
-          tone="success"
-          compact
-        />
+        <SummaryTile label="Active" value={totals.active} tone="success" />
+        <SummaryTile label="Booked" value={totals.booked} tone="info" />
+        <SummaryTile label="Capacity" value={totals.capacity} tone="brand" />
       </div>
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <div className="relative flex-1 min-w-[240px]">
+        <div className="relative min-w-[240px] flex-1">
           <Search
             size={14}
             className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"
           />
           <input
             type="text"
-            placeholder="Search by name, code, category, venue, or tag"
+            placeholder="Search by name, organizer, or branch"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="h-10 w-full rounded-md border border-surface-border bg-surface-card pl-9 pr-3 text-sm text-gray-100 placeholder:text-gray-500 focus:border-brand focus:outline-none"
           />
         </div>
         <select
-          value={categoryFilter}
-          onChange={(e) => setCategoryFilter(e.target.value)}
-          className="h-10 rounded-md border border-surface-border bg-surface-card px-3 text-sm text-gray-100 focus:border-brand focus:outline-none"
-        >
-          <option value={allFilter}>All categories</option>
-          {EVENT_CATEGORIES.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
-        <select
-          value={typeFilter}
-          onChange={(e) => setTypeFilter(e.target.value)}
-          className="h-10 rounded-md border border-surface-border bg-surface-card px-3 text-sm text-gray-100 focus:border-brand focus:outline-none"
-        >
-          <option value={allFilter}>All types</option>
-          {EVENT_TYPE_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-        <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
           className="h-10 rounded-md border border-surface-border bg-surface-card px-3 text-sm text-gray-100 focus:border-brand focus:outline-none"
         >
           <option value={allFilter}>All statuses</option>
-          {EVENT_LIFECYCLE_STATUS_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
+          {EVENT_STATUS_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
             </option>
           ))}
         </select>
       </div>
 
+      {isError ? (
+        <div className="mb-4 rounded-md border border-accent-danger/30 bg-accent-danger/10 px-4 py-3 text-sm text-accent-danger">
+          Failed to load events. Please refresh and try again.
+        </div>
+      ) : null}
+
       <div className="overflow-hidden rounded-xl border border-surface-border bg-surface-card">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1260px] text-sm">
+          <table className="w-full min-w-[1100px] text-sm">
             <thead>
               <tr className="border-b border-surface-border bg-surface-elevated text-left text-xs uppercase tracking-wide text-gray-400">
                 <th className="px-4 py-3 font-medium">Event</th>
-                <th className="px-4 py-3 font-medium">Type</th>
+                <th className="px-4 py-3 font-medium">Organizer</th>
+                <th className="px-4 py-3 font-medium">Branch</th>
                 <th className="px-4 py-3 font-medium">Schedule</th>
-                <th className="px-4 py-3 font-medium">Location</th>
+                <th className="px-4 py-3 font-medium">Registration deadline</th>
                 <th className="px-4 py-3 font-medium">Capacity</th>
-                <th className="px-4 py-3 text-right font-medium">Price</th>
+                <th className="px-4 py-3 text-right font-medium">Ticket price</th>
                 <th className="px-4 py-3 font-medium">Status</th>
-                <th className="px-4 py-3 font-medium">Publish</th>
+                <th className="px-4 py-3 font-medium">Created</th>
                 <th className="px-4 py-3 text-right font-medium">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.length === 0 ? (
+              {isLoading || isFetching ? (
                 <tr>
-                  <td colSpan={9} className="px-4 py-10 text-center text-gray-500">
+                  <td colSpan={10} className="px-4 py-10 text-center text-gray-500">
+                    Loading events…
+                  </td>
+                </tr>
+              ) : filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={10} className="px-4 py-10 text-center text-gray-500">
                     No events match your filters.
                   </td>
                 </tr>
               ) : (
-                filtered.map((e) => (
+                filtered.map((event) => (
                   <tr
-                    key={e.id}
-                    className={`border-b border-surface-border last:border-b-0 hover:bg-surface-elevated ${
-                      e.hidden ? 'opacity-60' : ''
-                    }`}
+                    key={event.id}
+                    className="border-b border-surface-border last:border-b-0 hover:bg-surface-elevated"
                   >
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
-                        <EventThumb src={e.image} alt={e.name} />
+                        <EventThumb src={event.image} alt={event.name} />
                         <div className="min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            <span className="truncate font-medium text-gray-100">
-                              {e.name}
-                            </span>
-                            {e.featured && (
-                              <Star
-                                size={12}
-                                className="shrink-0 fill-accent-amber text-accent-amber"
-                              />
-                            )}
-                          </div>
-                          <div className="text-[11px] text-gray-500">
-                            {e.category} · {e.code}
-                          </div>
+                          <div className="truncate font-medium text-gray-100">{event.name}</div>
+                          <div className="text-[11px] text-gray-500">{event.mainCategory ?? 'event'}</div>
                         </div>
                       </div>
                     </td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                          typeToneClass[e.eventType]
-                        }`}
-                      >
-                        {typeIcon(e.eventType)} {typeLabel(e.eventType)}
-                      </span>
-                    </td>
+                    <td className="px-4 py-3 text-gray-300">{event.organizerName || '—'}</td>
+                    <td className="px-4 py-3 text-gray-300">{event.branchName || '—'}</td>
                     <td className="px-4 py-3">
                       <div className="inline-flex items-center gap-1 text-gray-200">
                         <Calendar size={12} className="text-gray-500" />
-                        <span className="text-sm">{formatDate(e.startAt)}</span>
+                        <span className="text-sm">{formatDateTime(event.startTime)}</span>
                       </div>
-                      <div className="inline-flex items-center gap-1 text-[11px] text-gray-500">
-                        <Clock size={10} /> {formatTime(e.startAt)}
-                        {' · '}
-                        {durationLabel(e.startAt, e.endAt)}
+                      <div className="text-[11px] text-gray-500">
+                        to {formatDateTime(event.endTime)}
                       </div>
                     </td>
-                    <td className="px-4 py-3">
-                      {e.eventType === 'online' ? (
-                        <div className="text-sm text-gray-200">{e.onlinePlatform || '—'}</div>
-                      ) : (
-                        <>
-                          <div
-                            className="max-w-[180px] truncate text-sm text-gray-200"
-                            title={e.venueName}
-                          >
-                            {e.venueName || '—'}
-                          </div>
-                          <div className="text-[11px] text-gray-500">{e.venueCity}</div>
-                        </>
-                      )}
+                    <td className="px-4 py-3 text-xs text-gray-400">
+                      {formatDateTime(event.registrationDeadline)}
                     </td>
                     <td className="px-4 py-3">
-                      <CapacityBar
-                        booked={e.bookedCount}
-                        max={e.maxCapacity}
-                        min={e.minCapacity}
-                      />
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      {e.pricingType === 'free' ? (
-                        <span className="font-medium text-accent-success">Free</span>
-                      ) : e.earlyBirdPrice != null ? (
-                        <div className="flex flex-col items-end">
-                          <span className="font-medium text-gray-100">
-                            {formatPrice(e.earlyBirdPrice)}
-                          </span>
-                          <span className="text-xs text-gray-500 line-through">
-                            {formatPrice(e.price)}
-                          </span>
-                          <span className="text-[10px] uppercase tracking-wide text-accent-amber">
-                            Early bird
-                          </span>
-                        </div>
-                      ) : (
-                        <span className="font-medium text-gray-100">
-                          {formatPrice(e.price)}
+                      <div className="inline-flex items-center gap-1 text-gray-200">
+                        <Users size={12} className="text-gray-500" />
+                        <span>
+                          {event.bookedCapacity} / {event.maxCapacity}
                         </span>
-                      )}
+                      </div>
                     </td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                          lifecycleToneClass[e.status]
-                        }`}
-                      >
-                        {lifecycleLabel(e.status)}
-                      </span>
+                    <td className="px-4 py-3 text-right font-semibold text-gray-100">
+                      {formatPrice(event.ticketPrice)}
                     </td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                          publishToneClass[e.publishStatus]
-                        }`}
-                      >
-                        {publishLabel(e.publishStatus)}
-                      </span>
+                    <td className="px-4 py-3">{statusBadge(event.status)}</td>
+                    <td className="px-4 py-3 text-xs text-gray-400">
+                      {formatDateTime(event.createdAt)}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">
                         <IconButton
-                          title={e.hidden ? 'Show in listing' : 'Hide from listing'}
-                          onClick={() => toggleHidden(e.id)}
-                        >
-                          {e.hidden ? <Eye size={15} /> : <EyeOff size={15} />}
-                        </IconButton>
-                        <IconButton
                           title="Edit"
-                          onClick={() => setModal({ mode: 'edit', event: e })}
+                          onClick={() => setModal({ mode: 'edit', event })}
                         >
                           <Pencil size={15} />
                         </IconButton>
-                        <IconButton title="Delete" danger onClick={() => confirmDelete(e)}>
+                        <IconButton title="Delete" danger onClick={() => confirmDelete(event)}>
                           <Trash2 size={15} />
                         </IconButton>
                       </div>
@@ -446,48 +288,10 @@ export default function EventsPage() {
         open={modal.mode !== 'closed'}
         mode={modal.mode === 'edit' ? 'edit' : 'add'}
         initial={modal.mode === 'edit' ? modal.event : null}
+        submitting={isCreating || isUpdating}
         onCancel={() => setModal({ mode: 'closed' })}
         onSubmit={handleSubmit}
       />
-    </div>
-  )
-}
-
-function CapacityBar({
-  booked,
-  max,
-  min,
-}: {
-  booked: number
-  max: number
-  min: number
-}) {
-  const pct = max > 0 ? Math.min(100, Math.round((booked / max) * 100)) : 0
-  const reachedMin = booked >= min
-  const barColor =
-    pct >= 95
-      ? 'bg-accent-danger'
-      : pct >= 80
-        ? 'bg-accent-amber'
-        : reachedMin
-          ? 'bg-accent-success'
-          : 'bg-gray-500'
-  return (
-    <div className="w-[140px]">
-      <div className="flex items-center justify-between text-[11px] text-gray-400">
-        <span className="inline-flex items-center gap-1">
-          <Users size={10} />
-          {booked} / {max}
-        </span>
-        <span>{pct}%</span>
-      </div>
-      <div className="mt-1 h-1.5 w-full rounded-full bg-surface-elevated">
-        <div
-          className={`h-full rounded-full ${barColor}`}
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-      <div className="mt-0.5 text-[10px] text-gray-500">Min {min}</div>
     </div>
   )
 }
@@ -541,12 +345,10 @@ function SummaryTile({
   label,
   value,
   tone,
-  compact,
 }: {
   label: string
   value: number | string
   tone: 'neutral' | 'success' | 'warning' | 'danger' | 'muted' | 'info' | 'brand'
-  compact?: boolean
 }) {
   const toneClass: Record<typeof tone, string> = {
     neutral: 'text-gray-100',
@@ -560,13 +362,7 @@ function SummaryTile({
   return (
     <div className="rounded-xl border border-surface-border bg-surface-card px-4 py-3">
       <div className="text-xs uppercase tracking-wide text-gray-500">{label}</div>
-      <div
-        className={`mt-1 font-semibold ${toneClass[tone]} ${
-          compact ? 'text-lg' : 'text-xl'
-        }`}
-      >
-        {value}
-      </div>
+      <div className={`mt-1 text-xl font-semibold ${toneClass[tone]}`}>{value}</div>
     </div>
   )
 }

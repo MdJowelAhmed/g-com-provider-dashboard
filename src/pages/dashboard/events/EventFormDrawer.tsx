@@ -1,93 +1,58 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Drawer,
   Form,
   Input,
   InputNumber,
   Select,
-  Switch,
   Row,
   Col,
   Divider,
   Button,
   Space,
-  Tooltip,
+  message,
 } from 'antd'
-import { motion } from 'framer-motion'
-import { HelpCircle } from 'lucide-react'
-import { useNavigate, useParams } from 'react-router-dom'
-import { EVENT_CAPACITY_PLAN_LIMIT } from './capacityPlan'
-import EventCapacityUpgradeModal from './components/EventCapacityUpgradeModal'
+import ImageUploader from '../../../components/common/ImageUploader'
+import { useGetBusinessCategoriesQuery } from '../../../redux/api/businessCategoryApi'
+import { useGetShopsQuery } from '../../../redux/api/shopManagementApi'
+import { useGetSubCategoriesQuery } from '../../../redux/api/serviceApi'
 import {
-  EVENT_CATEGORIES,
-  EVENT_TYPE_OPTIONS,
-  EVENT_LIFECYCLE_STATUS_OPTIONS,
-  EVENT_PUBLISH_STATUS_OPTIONS,
-  AGE_RESTRICTION_OPTIONS,
-  type Event,
-} from './eventTypes'
+  uploadImageFile,
+  useGetPresignedUploadUrlMutation,
+} from '../../../redux/api/imageUploadApi'
+import type { Event, EventFormValues } from './eventTypes'
+import { eventToFormValues } from './eventMapping'
 
 type Props = {
   open: boolean
   mode: 'add' | 'edit'
   initial?: Event | null
+  submitting?: boolean
   onCancel: () => void
-  onSubmit: (values: Omit<Event, 'id' | 'createdAt'>) => void
+  onSubmit: (values: EventFormValues) => void | Promise<void>
 }
 
-type FormValues = Omit<Event, 'id' | 'createdAt' | 'startAt' | 'endAt' | 'registrationDeadline' | 'earlyBirdUntil'> & {
-  startAt: string
-  endAt: string
-  registrationDeadline: string
-  earlyBirdUntil: string
-}
-
-const blankValues: FormValues = {
-  image: '',
+const blankValues: EventFormValues = {
   name: '',
-  code: '',
-  category: EVENT_CATEGORIES[0],
-  eventType: 'in_person',
-  shortDescription: '',
   description: '',
-  tags: '',
-
-  startAt: '',
-  endAt: '',
-  timezone: 'UTC',
+  startTime: '',
+  endTime: '',
   registrationDeadline: '',
-
-  venueName: '',
-  venueAddress: '',
-  venueCity: '',
-  venueLatitude: null,
-  venueLongitude: null,
-
-  onlinePlatform: '',
-  onlineJoinUrl: '',
-
-  minCapacity: 0,
+  latitude: null,
+  longitude: null,
   maxCapacity: 100,
-  bookedCount: 0,
-
-  pricingType: 'paid',
-  price: 0,
-  earlyBirdPrice: null,
-  earlyBirdUntil: '',
-
-  refundPolicy: '',
-  ageRestriction: 'all_ages',
-
-  status: 'scheduled',
-  publishStatus: 'draft',
-  hidden: false,
-  featured: false,
+  ticketPrice: 0,
+  image: '',
+  subCategory: '',
+  businessCategory: '',
+  organizerName: '',
+  branch: '',
 }
 
 function toDatetimeLocal(iso: string): string {
   if (!iso) return ''
   const d = new Date(iso)
-  if (isNaN(d.getTime())) return ''
+  if (Number.isNaN(d.getTime())) return ''
   const pad = (n: number) => n.toString().padStart(2, '0')
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(
     d.getHours(),
@@ -97,7 +62,7 @@ function toDatetimeLocal(iso: string): string {
 function fromDatetimeLocal(local: string): string {
   if (!local) return ''
   const d = new Date(local)
-  if (isNaN(d.getTime())) return ''
+  if (Number.isNaN(d.getTime())) return ''
   return d.toISOString()
 }
 
@@ -105,190 +70,184 @@ export default function EventFormDrawer({
   open,
   mode,
   initial,
+  submitting = false,
   onCancel,
   onSubmit,
 }: Props) {
-  const [form] = Form.useForm<FormValues>()
-  const navigate = useNavigate()
-  const { role } = useParams<{ role: string }>()
-  const [upgradeModalOpen, setUpgradeModalOpen] = useState(false)
-  const eventType = Form.useWatch('eventType', form)
-  const pricingType = Form.useWatch('pricingType', form)
-  const maxCapacityWatch = Form.useWatch('maxCapacity', form)
-  const capacityExceeded =
-    maxCapacityWatch != null && Number(maxCapacityWatch) > EVENT_CAPACITY_PLAN_LIMIT
+  const [form] = Form.useForm<EventFormValues>()
+  const [pendingImageFile, setPendingImageFile] = useState<File | null>(null)
+  const [isUploadingImage, setIsUploadingImage] = useState(false)
+  const [getPresignedUrl] = useGetPresignedUploadUrlMutation()
+
+  const { data: shopsData, isLoading: shopsLoading } = useGetShopsQuery(
+    { page: 1, limit: 100 },
+    { skip: !open },
+  )
+  const { data: categoriesData, isLoading: categoriesLoading } = useGetBusinessCategoriesQuery(
+    undefined,
+    { skip: !open },
+  )
+  const { data: subCategoriesData, isLoading: subCategoriesLoading } = useGetSubCategoriesQuery(
+    { category: 'event', page: 1, limit: 100 },
+    { skip: !open },
+  )
+
+  const branchOptions = useMemo(
+    () =>
+      (shopsData?.data ?? []).map((shop) => ({
+        value: shop._id,
+        label: shop.branchName,
+      })),
+    [shopsData?.data],
+  )
+
+  const businessCategoryOptions = useMemo(
+    () =>
+      (categoriesData?.data ?? []).map((category) => ({
+        value: category._id,
+        label: category.name,
+      })),
+    [categoriesData?.data],
+  )
+
+  const subCategoryOptions = useMemo(
+    () =>
+      (subCategoriesData?.data ?? [])
+        .filter((item) => item.status === 'active')
+        .map((sub) => ({
+          value: sub._id,
+          label: sub.name,
+        })),
+    [subCategoriesData?.data],
+  )
 
   useEffect(() => {
     if (!open) return
+    setPendingImageFile(null)
     if (mode === 'edit' && initial) {
-      const { id: _id, createdAt: _c, ...rest } = initial
-      void _id
-      void _c
+      const values = eventToFormValues(initial)
       form.setFieldsValue({
-        ...rest,
-        startAt: toDatetimeLocal(rest.startAt),
-        endAt: toDatetimeLocal(rest.endAt),
-        registrationDeadline: toDatetimeLocal(rest.registrationDeadline),
-        earlyBirdUntil: toDatetimeLocal(rest.earlyBirdUntil),
+        ...values,
+        startTime: toDatetimeLocal(values.startTime),
+        endTime: toDatetimeLocal(values.endTime),
+        registrationDeadline: toDatetimeLocal(values.registrationDeadline),
       })
     } else {
       form.setFieldsValue(blankValues)
     }
   }, [open, mode, initial, form])
 
-  const handleContactAdmin = () => {
-    setUpgradeModalOpen(false)
-    if (role) {
-      navigate(`/dashboard/${role}/support`)
-    }
-  }
-
   const handleOk = async () => {
-    const rawMax = form.getFieldValue('maxCapacity') as number | null | undefined
-    if (rawMax != null && Number(rawMax) > EVENT_CAPACITY_PLAN_LIMIT) {
-      setUpgradeModalOpen(true)
-      return
-    }
+    try {
+      const values = await form.validateFields()
+      let imageUrl = values.image?.trim() ?? ''
 
-    const values = await form.validateFields()
-    onSubmit({
-      ...values,
-      startAt: fromDatetimeLocal(values.startAt),
-      endAt: fromDatetimeLocal(values.endAt),
-      registrationDeadline: fromDatetimeLocal(values.registrationDeadline),
-      earlyBirdUntil: fromDatetimeLocal(values.earlyBirdUntil),
-      venueLatitude: values.venueLatitude ?? null,
-      venueLongitude: values.venueLongitude ?? null,
-      earlyBirdPrice: values.earlyBirdPrice ?? null,
-    })
+      if (pendingImageFile) {
+        setIsUploadingImage(true)
+        try {
+          imageUrl = await uploadImageFile(pendingImageFile, async (payload) => {
+            const result = await getPresignedUrl(payload).unwrap()
+            return result
+          })
+        } catch (error) {
+          message.error(
+            error instanceof Error ? error.message : 'Image upload failed.',
+          )
+          return
+        } finally {
+          setIsUploadingImage(false)
+        }
+      }
+
+      if (!imageUrl) {
+        message.error('Please select an event image.')
+        return
+      }
+
+      await onSubmit({
+        ...values,
+        image: imageUrl,
+        startTime: fromDatetimeLocal(values.startTime),
+        endTime: fromDatetimeLocal(values.endTime),
+        registrationDeadline: fromDatetimeLocal(values.registrationDeadline),
+      })
+    } catch {
+      // validation errors shown by ant form
+    }
   }
 
-  const showVenue = eventType === 'in_person' || eventType === 'hybrid'
-  const showOnline = eventType === 'online' || eventType === 'hybrid'
-  const isPaid = pricingType === 'paid'
+  const busy = submitting || isUploadingImage
 
   return (
-    <>
-      <EventCapacityUpgradeModal
-        open={upgradeModalOpen}
-        onCancel={() => setUpgradeModalOpen(false)}
-        onContactAdmin={handleContactAdmin}
-        planLimit={EVENT_CAPACITY_PLAN_LIMIT}
-      />
-      <Drawer
-        open={open}
-        title={mode === 'edit' ? 'Edit event' : 'Create event'}
-        onClose={onCancel}
-        width={800}
-        placement="right"
-        destroyOnHidden
-        footer={
-          <div
-            style={{
-              display: 'flex',
-              flexWrap: 'wrap',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              width: '100%',
-              gap: 12,
-            }}
-          >
-            <span className="min-h-[32px]">
-              {capacityExceeded ? (
-                <button
-                  type="button"
-                  onClick={() => setUpgradeModalOpen(true)}
-                  className="text-sm font-medium text-brand underline-offset-2 transition hover:text-brand-hover hover:underline"
-                >
-                  Capacity upgrade required — contact admin
-                </button>
-              ) : null}
-            </span>
-            <Space>
-              <Button onClick={onCancel}>Cancel</Button>
-              <Tooltip
-                title={
-                  capacityExceeded
-                    ? `Reduce maximum capacity to ${EVENT_CAPACITY_PLAN_LIMIT} or below, or contact admin for an upgrade.`
-                    : undefined
-                }
-              >
-                <span className={capacityExceeded ? 'inline-block' : undefined}>
-                  <Button type="primary" onClick={handleOk} disabled={capacityExceeded}>
-                    {mode === 'edit' ? 'Save changes' : 'Create event'}
-                  </Button>
-                </span>
-              </Tooltip>
-            </Space>
-          </div>
-        }
-      >
-      <Form
-        form={form}
-        layout="vertical"
-        initialValues={blankValues}
-        requiredMark="optional"
-      >
+    <Drawer
+      open={open}
+      title={mode === 'edit' ? 'Edit event' : 'Create event'}
+      onClose={onCancel}
+      width={780}
+      placement="right"
+      destroyOnHidden
+      footer={
+        <Space style={{ display: 'flex', justifyContent: 'flex-end', width: '100%' }}>
+          <Button onClick={onCancel} disabled={busy}>
+            Cancel
+          </Button>
+          <Button type="primary" onClick={handleOk} loading={busy}>
+            {isUploadingImage
+              ? 'Uploading image…'
+              : mode === 'edit'
+                ? 'Save changes'
+                : 'Create event'}
+          </Button>
+        </Space>
+      }
+    >
+      <Form form={form} layout="vertical" initialValues={blankValues} requiredMark="optional">
         <Divider titlePlacement="start" orientationMargin={0} plain>
           Basic info
         </Divider>
         <Row gutter={16}>
-          <Col span={16}>
+          <Col span={24}>
             <Form.Item
               name="name"
-              label="Event name"
+              label="Name"
               rules={[{ required: true, message: 'Name is required' }]}
             >
-              <Input placeholder="e.g. Jazz Night Live" />
-            </Form.Item>
-          </Col>
-          <Col span={8}>
-            <Form.Item
-              name="code"
-              label="Event code"
-              rules={[{ required: true, message: 'Code is required' }]}
-            >
-              <Input placeholder="EVT-JNL-001" />
-            </Form.Item>
-          </Col>
-          <Col span={8}>
-            <Form.Item
-              name="category"
-              label="Category"
-              rules={[{ required: true, message: 'Category is required' }]}
-            >
-              <Select options={EVENT_CATEGORIES.map((c) => ({ value: c, label: c }))} />
-            </Form.Item>
-          </Col>
-          <Col span={8}>
-            <Form.Item
-              name="eventType"
-              label="Event type"
-              rules={[{ required: true, message: 'Type is required' }]}
-            >
-              <Select options={EVENT_TYPE_OPTIONS} />
-            </Form.Item>
-          </Col>
-          <Col span={8}>
-            <Form.Item name="tags" label="Tags" help="Comma separated">
-              <Input placeholder="music, live, night" />
+              <Input placeholder="National Environment Event" />
             </Form.Item>
           </Col>
           <Col span={24}>
-            <Form.Item name="image" label="Cover image URL">
-              <Input placeholder="https://..." />
+            <Form.Item
+              name="description"
+              label="Description"
+              rules={[{ required: true, message: 'Description is required' }]}
+            >
+              <Input.TextArea rows={3} placeholder="This is event description" />
             </Form.Item>
           </Col>
           <Col span={24}>
-            <Form.Item name="shortDescription" label="Short description">
-              <Input placeholder="One-liner shown on the event card" maxLength={160} />
-            </Form.Item>
-          </Col>
-          <Col span={24}>
-            <Form.Item name="description" label="Full description">
-              <Input.TextArea
-                rows={4}
-                placeholder="What's the event about, the agenda, what attendees will experience"
+            <Form.Item
+              name="image"
+              label="Image"
+              rules={[
+                {
+                  validator: async () => {
+                    const current = form.getFieldValue('image') as string | undefined
+                    if (current?.trim() || pendingImageFile) return
+                    throw new Error('Image is required')
+                  },
+                },
+              ]}
+            >
+              <ImageUploader
+                value={form.getFieldValue('image')}
+                autoUpload={false}
+                onFileSelect={(file) => {
+                  setPendingImageFile(file ?? null)
+                  form.setFields([{ name: 'image', errors: [] }])
+                }}
+                onChange={(url) => form.setFieldValue('image', url)}
+                hint="Select image — uploads when you save the event"
+                heightClass="h-40"
               />
             </Form.Item>
           </Col>
@@ -300,8 +259,8 @@ export default function EventFormDrawer({
         <Row gutter={16}>
           <Col span={12}>
             <Form.Item
-              name="startAt"
-              label="Starts at"
+              name="startTime"
+              label="Start time"
               rules={[{ required: true, message: 'Start time is required' }]}
             >
               <Input type="datetime-local" />
@@ -309,8 +268,8 @@ export default function EventFormDrawer({
           </Col>
           <Col span={12}>
             <Form.Item
-              name="endAt"
-              label="Ends at"
+              name="endTime"
+              label="End time"
               rules={[{ required: true, message: 'End time is required' }]}
             >
               <Input type="datetime-local" />
@@ -318,264 +277,110 @@ export default function EventFormDrawer({
           </Col>
           <Col span={12}>
             <Form.Item
-              name="timezone"
-              label="Timezone"
-              rules={[{ required: true, message: 'Timezone is required' }]}
+              name="registrationDeadline"
+              label="Registration deadline"
+              rules={[{ required: true, message: 'Registration deadline is required' }]}
             >
-              <Input placeholder="e.g. America/New_York, UTC" />
-            </Form.Item>
-          </Col>
-          <Col span={12}>
-            <Form.Item name="registrationDeadline" label="Registration deadline">
               <Input type="datetime-local" />
             </Form.Item>
           </Col>
         </Row>
 
-        {showVenue ? (
-          <>
-            <Divider titlePlacement="start" orientationMargin={0} plain>
-              Venue
-            </Divider>
-            <Row gutter={16}>
-              <Col span={12}>
-                <Form.Item
-                  name="venueName"
-                  label="Venue name"
-                  rules={[
-                    showVenue
-                      ? { required: true, message: 'Venue name is required' }
-                      : {},
-                  ]}
-                >
-                  <Input placeholder="Blue Harbor Lounge" />
-                </Form.Item>
-              </Col>
-              <Col span={12}>
-                <Form.Item
-                  name="venueCity"
-                  label="City"
-                  rules={[
-                    showVenue ? { required: true, message: 'City is required' } : {},
-                  ]}
-                >
-                  <Input placeholder="New York, NY" />
-                </Form.Item>
-              </Col>
-              <Col span={24}>
-                <Form.Item
-                  name="venueAddress"
-                  label="Address"
-                  rules={[
-                    showVenue ? { required: true, message: 'Address is required' } : {},
-                  ]}
-                >
-                  <Input placeholder="250 W 44th St" />
-                </Form.Item>
-              </Col>
-              <Col span={12}>
-                <Form.Item name="venueLatitude" label="Latitude">
-                  <InputNumber
-                    step={0.0001}
-                    style={{ width: '100%' }}
-                    placeholder="40.7580"
-                  />
-                </Form.Item>
-              </Col>
-              <Col span={12}>
-                <Form.Item name="venueLongitude" label="Longitude">
-                  <InputNumber
-                    step={0.0001}
-                    style={{ width: '100%' }}
-                    placeholder="-73.9870"
-                  />
-                </Form.Item>
-              </Col>
-            </Row>
-          </>
-        ) : null}
-
-        {showOnline ? (
-          <>
-            <Divider titlePlacement="start" orientationMargin={0} plain>
-              Online
-            </Divider>
-            <Row gutter={16}>
-              <Col span={12}>
-                <Form.Item
-                  name="onlinePlatform"
-                  label="Platform"
-                  rules={[
-                    showOnline ? { required: true, message: 'Platform is required' } : {},
-                  ]}
-                >
-                  <Input placeholder="Zoom, Google Meet, YouTube Live" />
-                </Form.Item>
-              </Col>
-              <Col span={12}>
-                <Form.Item name="onlineJoinUrl" label="Join URL / note">
-                  <Input placeholder="Public URL or 'Sent to registrants before event'" />
-                </Form.Item>
-              </Col>
-            </Row>
-          </>
-        ) : null}
-
         <Divider titlePlacement="start" orientationMargin={0} plain>
-          Capacity
+          Location
         </Divider>
         <Row gutter={16}>
-          <Col span={8}>
+          <Col span={12}>
             <Form.Item
-              name="minCapacity"
-              label="Minimum capacity"
-              help="Event only runs if this is reached"
-              rules={[{ required: true, message: 'Enter minimum capacity' }]}
+              name="longitude"
+              label="Longitude"
+              rules={[{ required: true, message: 'Longitude is required' }]}
             >
-              <InputNumber min={0} style={{ width: '100%' }} />
+              <InputNumber step={0.000001} style={{ width: '100%' }} placeholder="90.398911" />
             </Form.Item>
           </Col>
-          <Col span={8}>
+          <Col span={12}>
+            <Form.Item
+              name="latitude"
+              label="Latitude"
+              rules={[{ required: true, message: 'Latitude is required' }]}
+            >
+              <InputNumber step={0.000001} style={{ width: '100%' }} placeholder="23.779343" />
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Divider titlePlacement="start" orientationMargin={0} plain>
+          Capacity & pricing
+        </Divider>
+        <Row gutter={16}>
+          <Col span={12}>
             <Form.Item
               name="maxCapacity"
-              validateStatus={capacityExceeded ? 'error' : undefined}
-              label={
-                <span className="inline-flex items-center gap-2">
-                  Maximum capacity
-                  <Tooltip
-                    title={`Standard plans include up to ${EVENT_CAPACITY_PLAN_LIMIT} attendees. Contact admin for higher limits.`}
-                  >
-                    <HelpCircle
-                      size={14}
-                      className="cursor-help text-gray-500 hover:text-gray-400"
-                      aria-hidden
-                    />
-                  </Tooltip>
-                </span>
-              }
-              help={
-                capacityExceeded ? (
-                  <motion.span
-                    initial={{ opacity: 0, y: -4 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.22 }}
-                    className="block text-[13px] text-accent-amber"
-                  >
-                    Exceeds your workspace limit ({EVENT_CAPACITY_PLAN_LIMIT} attendees). Lower the
-                    capacity or contact admin to upgrade.
-                  </motion.span>
-                ) : (
-                  <span className="text-[12px] text-gray-600">
-                    Your current event capacity limit is {EVENT_CAPACITY_PLAN_LIMIT} attendees.
-                  </span>
-                )
-              }
-              rules={[{ required: true, message: 'Enter maximum capacity' }]}
+              label="Max capacity"
+              rules={[{ required: true, message: 'Max capacity is required' }]}
             >
               <InputNumber min={1} style={{ width: '100%' }} />
             </Form.Item>
           </Col>
-          <Col span={8}>
-            <Form.Item name="bookedCount" label="Already booked">
-              <InputNumber min={0} style={{ width: '100%' }} />
-            </Form.Item>
-          </Col>
-        </Row>
-
-        <Divider titlePlacement="start" orientationMargin={0} plain>
-          Pricing
-        </Divider>
-        <Row gutter={16}>
-          <Col span={8}>
+          <Col span={12}>
             <Form.Item
-              name="pricingType"
-              label="Pricing type"
-              rules={[{ required: true, message: 'Pricing type is required' }]}
+              name="ticketPrice"
+              label="Ticket price ($)"
+              rules={[{ required: true, message: 'Ticket price is required' }]}
             >
+              <InputNumber min={0} step={0.01} style={{ width: '100%' }} />
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Divider titlePlacement="start" orientationMargin={0} plain>
+          Optional
+        </Divider>
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item name="organizerName" label="Organizer name">
+              <Input placeholder="Evently" />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item name="businessCategory" label="Business category">
               <Select
-                options={[
-                  { value: 'free', label: 'Free' },
-                  { value: 'paid', label: 'Paid' },
-                ]}
+                allowClear
+                showSearch
+                optionFilterProp="label"
+                placeholder="Select business category"
+                loading={categoriesLoading}
+                options={businessCategoryOptions}
               />
             </Form.Item>
           </Col>
-          {isPaid ? (
-            <>
-              <Col span={8}>
-                <Form.Item
-                  name="price"
-                  label="Ticket price ($)"
-                  rules={[{ required: true, message: 'Price is required' }]}
-                >
-                  <InputNumber min={0} step={0.01} style={{ width: '100%' }} />
-                </Form.Item>
-              </Col>
-              <Col span={8}>
-                <Form.Item name="earlyBirdPrice" label="Early-bird price ($)">
-                  <InputNumber
-                    min={0}
-                    step={0.01}
-                    style={{ width: '100%' }}
-                    placeholder="Optional"
-                  />
-                </Form.Item>
-              </Col>
-              <Col span={12}>
-                <Form.Item name="earlyBirdUntil" label="Early-bird ends">
-                  <Input type="datetime-local" />
-                </Form.Item>
-              </Col>
-            </>
-          ) : null}
-        </Row>
-
-        <Divider titlePlacement="start" orientationMargin={0} plain>
-          Policy
-        </Divider>
-        <Row gutter={16}>
           <Col span={12}>
-            <Form.Item name="ageRestriction" label="Age restriction">
-              <Select options={AGE_RESTRICTION_OPTIONS} />
-            </Form.Item>
-          </Col>
-          <Col span={24}>
-            <Form.Item name="refundPolicy" label="Refund policy">
-              <Input.TextArea
-                rows={2}
-                placeholder="e.g. Full refund up to 48 hours before event."
+            <Form.Item name="subCategory" label="Sub category">
+              <Select
+                allowClear
+                showSearch
+                optionFilterProp="label"
+                placeholder="Select sub category"
+                loading={subCategoriesLoading}
+                options={subCategoryOptions}
               />
             </Form.Item>
           </Col>
-        </Row>
-
-        <Divider titlePlacement="start" orientationMargin={0} plain>
-          Status & visibility
-        </Divider>
-        <Row gutter={16}>
           <Col span={12}>
-            <Form.Item name="status" label="Lifecycle status">
-              <Select options={EVENT_LIFECYCLE_STATUS_OPTIONS} />
-            </Form.Item>
-          </Col>
-          <Col span={12}>
-            <Form.Item name="publishStatus" label="Publish status">
-              <Select options={EVENT_PUBLISH_STATUS_OPTIONS} />
-            </Form.Item>
-          </Col>
-          <Col span={12}>
-            <Form.Item name="featured" label="Featured" valuePropName="checked">
-              <Switch />
-            </Form.Item>
-          </Col>
-          <Col span={12}>
-            <Form.Item name="hidden" label="Hidden from listing" valuePropName="checked">
-              <Switch />
+            <Form.Item name="branch" label="Branch">
+              <Select
+                allowClear
+                showSearch
+                optionFilterProp="label"
+                placeholder="Select branch"
+                loading={shopsLoading}
+                options={branchOptions}
+              />
             </Form.Item>
           </Col>
         </Row>
       </Form>
     </Drawer>
-    </>
   )
 }
