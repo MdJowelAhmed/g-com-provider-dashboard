@@ -46,7 +46,7 @@ export default function Topbar({ user }: Props) {
       <div className="flex items-center gap-4">
         {!user.stripeConnected && (
           <span className="hidden rounded-full bg-accent-amber/20 px-3 py-1 text-xs font-medium text-accent-amber md:inline-block">
-            Stripe not connected
+            Mobile Money not connected
           </span>
         )}
         <button

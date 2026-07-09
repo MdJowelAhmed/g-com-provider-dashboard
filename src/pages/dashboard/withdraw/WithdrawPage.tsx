@@ -512,7 +512,7 @@ function ConnectBanner({ onConnect }: { onConnect: () => void }) {
         onClick={onConnect}
         className="h-8 rounded-md bg-accent-amber px-3 text-xs font-semibold text-gray-900 hover:bg-accent-amber/90"
       >
-        Connect Stripe
+        Connect Mobile Money
       </button>
     </div>
   )
@@ -554,7 +554,7 @@ function AccountCard({
             onClick={onConnect}
             className="mt-4 flex h-10 w-full items-center justify-center gap-1.5 rounded-md bg-brand px-4 text-sm font-medium text-white hover:bg-brand-hover"
           >
-            Connect Stripe
+            Connect Mobile Money
           </button>
         </>
       ) : (

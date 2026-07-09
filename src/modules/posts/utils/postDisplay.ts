@@ -1,6 +1,43 @@
 import type { CampaignDisplayStatus, Post, PostMedia } from '../types'
 import { getItemDisplayLabel, getPanelDisplayLabel } from './hubPostMapping'
 
+const VIDEO_EXTENSIONS = ['.mp4', '.mov', '.webm', '.mkv', '.avi', '.m4v', '.ogv', '.mpeg', '.mpg', '.3gp']
+
+export function inferPostMediaKind(url: string): PostMedia['kind'] {
+  const trimmed = url.trim()
+  if (!trimmed) return 'image'
+
+  const lowered = trimmed.toLowerCase()
+  const withoutQuery = lowered.split('?')[0] ?? lowered
+
+  if (VIDEO_EXTENSIONS.some((ext) => withoutQuery.endsWith(ext) || withoutQuery.includes(ext))) {
+    return 'video'
+  }
+
+  if (/\/video\//.test(withoutQuery) || /\/videos\//.test(withoutQuery)) {
+    return 'video'
+  }
+
+  return 'image'
+}
+
+export function buildPostMedia(post: Post): PostMedia[] {
+  if (!post.mediaUrl?.trim()) return []
+
+  const url = post.mediaUrl.trim()
+  const kind = inferPostMediaKind(url)
+  const fileName = url.split('/').pop()?.split('?')[0] || 'media'
+
+  return [
+    {
+      id: `${post.id}_media`,
+      kind,
+      url,
+      name: fileName,
+    },
+  ]
+}
+
 export type PostDisplayRow = {
   panel: string
   itemLabel: string
@@ -37,16 +74,7 @@ export function getCampaignDisplayStatus(
 }
 
 export function getPostDisplayRow(post: Post): PostDisplayRow {
-  const media: PostMedia[] = post.mediaUrl
-    ? [
-        {
-          id: `${post.id}_media`,
-          kind: 'image',
-          url: post.mediaUrl,
-          name: 'media',
-        },
-      ]
-    : []
+  const media = buildPostMedia(post)
 
   return {
     panel: getPanelDisplayLabel(post.panel),

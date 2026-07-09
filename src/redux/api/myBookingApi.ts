@@ -77,9 +77,13 @@ export interface OrderEventLineItem {
     price?: number
     image?: string
   }
+  ticketNumber?: string
   quantity?: number
+  price?: number
+  serviceFee?: number
   totalAmount?: number
   eventDate?: string
+  status?: string
 }
 
 export type OrderLineItems =

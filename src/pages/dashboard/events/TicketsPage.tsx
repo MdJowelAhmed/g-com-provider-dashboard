@@ -1,16 +1,15 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Search,
   Eye,
-  Calendar,
+  ImageOff,
   Hash,
-  Ticket as TicketIcon,
-  CheckCircle2,
+  Ticket as TicketIcon
 } from 'lucide-react'
 import PageHeader from '../../../components/dashboard/PageHeader'
 import TicketDrawer from './TicketDrawer'
+import { useGetProviderOrdersQuery, type ProviderOrderApiDoc } from '../../../redux/api/myBookingApi'
 import {
-  INITIAL_TICKETS,
   TICKET_STATUS_OPTIONS,
   TICKET_PAYMENT_STATUS_OPTIONS,
   TICKET_CHANNEL_LABELS,
@@ -34,20 +33,6 @@ const paymentToneClass: Record<TicketPaymentStatus, string> = {
   refunded: 'bg-gray-500/20 text-gray-300',
 }
 
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString(undefined, {
-    day: 'numeric',
-    month: 'short',
-  })
-}
-
-function formatTime(iso: string) {
-  return new Date(iso).toLocaleTimeString(undefined, {
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
-
 function statusLabel(s: TicketStatus) {
   return TICKET_STATUS_OPTIONS.find((o) => o.value === s)?.label ?? s
 }
@@ -56,14 +41,97 @@ function paymentLabel(s: TicketPaymentStatus) {
   return TICKET_PAYMENT_STATUS_OPTIONS.find((o) => o.value === s)?.label ?? s
 }
 
+function mapStatusFromApi(order: ProviderOrderApiDoc): TicketStatus {
+  const eventLineItem =
+    order.lineItems && !Array.isArray(order.lineItems) && 'event' in order.lineItems
+      ? order.lineItems
+      : null
+  const lineStatus = eventLineItem?.status?.toLowerCase()
+  if (lineStatus === 'confirmed') return 'confirmed'
+  if (lineStatus === 'cancelled') return 'cancelled'
+
+  const orderStatus = (order.status ?? '').toLowerCase()
+  if (orderStatus === 'cancelled') return 'cancelled'
+  if (orderStatus === 'refunded') return 'refunded'
+  if (orderStatus === 'paid') return 'confirmed'
+  return 'pending'
+}
+
+function mapPaymentStatusFromApi(value: string | undefined): TicketPaymentStatus {
+  const normalized = (value ?? '').toLowerCase()
+  if (normalized === 'paid') return 'paid'
+  if (normalized === 'refunded') return 'refunded'
+  return 'unpaid'
+}
+
+function mapOrderToTicket(order: ProviderOrderApiDoc): Ticket | null {
+  const lineItem =
+    order.lineItems && !Array.isArray(order.lineItems) && 'event' in order.lineItems
+      ? order.lineItems
+      : null
+  if (!lineItem?.event) return null
+
+  const eventName = lineItem.event.name || 'Event'
+  const issuedAt = order.createdAt || new Date().toISOString()
+  const quantity = lineItem.quantity ?? 1
+  const subtotal = order.subTotal ?? lineItem.price ?? 0
+  const total = order.totalAmount ?? lineItem.totalAmount ?? subtotal
+
+  return {
+    id: order._id,
+    code: lineItem.ticketNumber || order.orderId,
+    event: {
+      id: lineItem.event._id,
+      name: eventName,
+      code: order.orderId,
+      startAt: issuedAt,
+      endAt: issuedAt,
+      venueLabel: '—',
+    },
+    buyer: {
+      name: order.customer?.name || 'Unknown customer',
+      phone: order.customer?.phone || '',
+      email: order.customer?.email || '',
+    },
+    tier: 'General',
+    quantity,
+    unitPrice: lineItem.price ?? (quantity > 0 ? subtotal / quantity : subtotal),
+    subtotal,
+    discount: 0,
+    total,
+    promoCode: '',
+    seatLabel: '',
+    status: mapStatusFromApi(order),
+    paymentStatus: mapPaymentStatusFromApi(order.paymentStatus),
+    paymentMethod: 'online',
+    channel: 'direct',
+    checkedIn: false,
+    checkedInAt: null,
+    issuedAt,
+    notes: '',
+  }
+}
+
 export default function TicketsPage() {
-  const [tickets, setTickets] = useState<Ticket[]>(INITIAL_TICKETS)
+  const { data, isLoading, isFetching, isError } = useGetProviderOrdersQuery({
+    page: 1,
+    limit: 100,
+  })
+  const [tickets, setTickets] = useState<Ticket[]>([])
   const [search, setSearch] = useState('')
   const [eventFilter, setEventFilter] = useState<string>(allFilter)
   const [statusFilter, setStatusFilter] = useState<string>(allFilter)
   const [paymentFilter, setPaymentFilter] = useState<string>(allFilter)
   const [checkinFilter, setCheckinFilter] = useState<string>(allFilter)
   const [openId, setOpenId] = useState<string | null>(null)
+
+  useEffect(() => {
+    const mapped = (data?.data ?? [])
+      .filter((order) => order.orderType === 'event')
+      .map((order) => mapOrderToTicket(order))
+      .filter((ticket): ticket is Ticket => ticket !== null)
+    setTickets(mapped)
+  }, [data?.data])
 
   const events = useMemo(() => {
     const seen = new Map<string, { id: string; name: string }>()
@@ -131,7 +199,7 @@ export default function TicketsPage() {
         description="All tickets sold across your events — manage status, payments, and check-ins."
       />
 
-      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
+      {/* <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
         <SummaryTile label="Total tickets" value={totals.total} tone="neutral" />
         <SummaryTile label="Confirmed" value={totals.confirmed} tone="success" />
         <SummaryTile label="Units sold" value={totals.unitsSold} tone="brand" />
@@ -142,7 +210,7 @@ export default function TicketsPage() {
           tone="success"
           compact
         />
-      </div>
+      </div> */}
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <div className="relative flex-1 min-w-[240px]">
@@ -152,25 +220,14 @@ export default function TicketsPage() {
           />
           <input
             type="text"
-            placeholder="Search by code, buyer, event, or tier"
+            placeholder="Search by code, buyer, or event"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="h-10 w-full rounded-md border border-surface-border bg-surface-card pl-9 pr-3 text-sm text-gray-100 placeholder:text-gray-500 focus:border-brand focus:outline-none"
+            className="h-10 w-[300px] rounded-md border border-surface-border bg-surface-card pl-9 pr-3 text-sm text-gray-100 placeholder:text-gray-500 focus:border-brand focus:outline-none"
           />
         </div>
-        <select
-          value={eventFilter}
-          onChange={(e) => setEventFilter(e.target.value)}
-          className="h-10 rounded-md border border-surface-border bg-surface-card px-3 text-sm text-gray-100 focus:border-brand focus:outline-none"
-        >
-          <option value={allFilter}>All events</option>
-          {events.map((ev) => (
-            <option key={ev.id} value={ev.id}>
-              {ev.name}
-            </option>
-          ))}
-        </select>
-        <select
+
+        {/* <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
           className="h-10 rounded-md border border-surface-border bg-surface-card px-3 text-sm text-gray-100 focus:border-brand focus:outline-none"
@@ -181,7 +238,7 @@ export default function TicketsPage() {
               {o.label}
             </option>
           ))}
-        </select>
+        </select> */}
         <select
           value={paymentFilter}
           onChange={(e) => setPaymentFilter(e.target.value)}
@@ -194,38 +251,35 @@ export default function TicketsPage() {
             </option>
           ))}
         </select>
-        <select
-          value={checkinFilter}
-          onChange={(e) => setCheckinFilter(e.target.value)}
-          className="h-10 rounded-md border border-surface-border bg-surface-card px-3 text-sm text-gray-100 focus:border-brand focus:outline-none"
-        >
-          <option value={allFilter}>All check-ins</option>
-          <option value="in">Checked in</option>
-          <option value="out">Not checked in</option>
-        </select>
+       
       </div>
 
       <div className="overflow-hidden rounded-xl border border-surface-border bg-surface-card">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1240px] text-sm">
+          <table className="w-full min-w-[1120px] text-sm">
             <thead>
               <tr className="border-b border-surface-border bg-surface-elevated text-left text-xs uppercase tracking-wide text-gray-400">
                 <th className="px-4 py-3 font-medium">Ticket</th>
                 <th className="px-4 py-3 font-medium">Event</th>
                 <th className="px-4 py-3 font-medium">Buyer</th>
-                <th className="px-4 py-3 font-medium">Tier</th>
+                <th className="px-4 py-3 font-medium">Preview</th>
                 <th className="px-4 py-3 text-right font-medium">Qty</th>
                 <th className="px-4 py-3 text-right font-medium">Total</th>
                 <th className="px-4 py-3 font-medium">Status</th>
                 <th className="px-4 py-3 font-medium">Payment</th>
-                <th className="px-4 py-3 font-medium">Check-in</th>
                 <th className="px-4 py-3 text-right font-medium">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.length === 0 ? (
+              {isLoading || isFetching ? (
                 <tr>
-                  <td colSpan={10} className="px-4 py-10 text-center text-gray-500">
+                  <td colSpan={9} className="px-4 py-10 text-center text-gray-500">
+                    Loading tickets...
+                  </td>
+                </tr>
+              ) : filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={9} className="px-4 py-10 text-center text-gray-500">
                     No tickets match your filters.
                   </td>
                 </tr>
@@ -248,15 +302,8 @@ export default function TicketsPage() {
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <div
-                        className="max-w-[180px] truncate text-gray-200"
-                        title={t.event.name}
-                      >
+                      <div className="max-w-[220px] truncate text-gray-200" title={t.event.name}>
                         {t.event.name}
-                      </div>
-                      <div className="flex items-center gap-1 text-[11px] text-gray-500">
-                        <Calendar size={10} />
-                        {formatDate(t.event.startAt)} · {formatTime(t.event.startAt)}
                       </div>
                     </td>
                     <td className="px-4 py-3">
@@ -266,14 +313,14 @@ export default function TicketsPage() {
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <span className="rounded-full bg-surface-elevated px-2 py-0.5 text-xs font-medium text-gray-200">
-                        {t.tier}
-                      </span>
-                      {t.promoCode ? (
-                        <div className="mt-0.5 font-mono text-[10px] text-gray-500">
-                          {t.promoCode}
+                      {t.event.code ? (
+                        <div className="flex items-center gap-2">
+                          <EventThumb alt={t.event.name} />
+                          <span className="text-xs text-gray-500">{t.event.code}</span>
                         </div>
-                      ) : null}
+                      ) : (
+                        <span className="text-xs text-gray-500">—</span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="inline-flex items-center gap-0.5 text-gray-200">
@@ -309,16 +356,6 @@ export default function TicketsPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      {t.checkedIn ? (
-                        <span className="inline-flex items-center gap-1 text-accent-success">
-                          <CheckCircle2 size={13} />
-                          <span className="text-xs font-medium">In</span>
-                        </span>
-                      ) : (
-                        <span className="text-xs text-gray-500">—</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
                       <div className="flex items-center justify-end">
                         <button
                           type="button"
@@ -340,6 +377,11 @@ export default function TicketsPage() {
           </table>
         </div>
       </div>
+      {isError ? (
+        <div className="mt-4 rounded-md border border-accent-danger/30 bg-accent-danger/10 px-4 py-3 text-sm text-accent-danger">
+          Failed to load tickets from API.
+        </div>
+      ) : null}
 
       <TicketDrawer
         open={openId !== null}
@@ -348,6 +390,15 @@ export default function TicketsPage() {
         onUpdate={handleUpdate}
         onDelete={handleDelete}
       />
+    </div>
+  )
+}
+
+function EventThumb({ alt }: { alt: string }) {
+  return (
+    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-surface-border bg-surface-elevated text-gray-500">
+      <ImageOff size={14} />
+      <span className="sr-only">{alt}</span>
     </div>
   )
 }

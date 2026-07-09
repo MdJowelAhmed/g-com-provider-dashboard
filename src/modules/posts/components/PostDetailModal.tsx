@@ -7,7 +7,8 @@ import CampaignStatusBadge from './CampaignStatusBadge'
 type Props = {
   open: boolean
   post: Post | null
-  serviceLabelById?: Map<string, string>
+  itemColumnLabel?: string
+  itemLabelById?: Map<string, string>
   onClose: () => void
 }
 
@@ -28,7 +29,13 @@ function fmtDate(value: string) {
   })
 }
 
-export default function PostDetailModal({ open, post, serviceLabelById, onClose }: Props) {
+export default function PostDetailModal({
+  open,
+  post,
+  itemColumnLabel = 'Item',
+  itemLabelById,
+  onClose,
+}: Props) {
   if (!post) {
     return null
   }
@@ -59,9 +66,11 @@ export default function PostDetailModal({ open, post, serviceLabelById, onClose 
             <div className="mt-1 text-gray-100">{row.panel || '—'}</div>
           </div>
           <div className="rounded-lg border border-surface-border bg-surface-elevated/60 p-3">
-            <div className="text-[11px] font-medium uppercase tracking-wide text-gray-500">Service</div>
+            <div className="text-[11px] font-medium uppercase tracking-wide text-gray-500">
+              {itemColumnLabel}
+            </div>
             <div className="mt-1 text-gray-100">
-              {serviceLabelById?.get(post.itemId) ?? post.itemId ?? '—'}
+              {itemLabelById?.get(post.itemId) ?? post.itemId ?? '—'}
             </div>
           </div>
           <div className="rounded-lg border border-surface-border bg-surface-elevated/60 p-3">
@@ -97,18 +106,27 @@ export default function PostDetailModal({ open, post, serviceLabelById, onClose 
         {row.media.length > 0 ? (
           <div>
             <div className="mb-2 text-[11px] font-medium uppercase tracking-wide text-gray-500">Media</div>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {row.media.map((m) => (
                 <div
                   key={m.id}
                   className="overflow-hidden rounded-lg border border-surface-border bg-black/30"
                 >
                   {m.kind === 'video' ? (
-                    <video src={m.url} controls className="aspect-video w-full object-cover" />
+                    <video
+                      src={m.url}
+                      controls
+                      playsInline
+                      preload="metadata"
+                      className="aspect-video w-full bg-black object-contain"
+                    />
                   ) : (
                     <img src={m.url} alt="" className="aspect-video w-full object-cover" />
                   )}
-                  <div className="truncate px-2 py-1 text-[11px] text-gray-500">{m.name}</div>
+                  <div className="flex items-center justify-between gap-2 px-2 py-1 text-[11px] text-gray-500">
+                    <span className="truncate">{m.name}</span>
+                    <span className="shrink-0 uppercase tracking-wide">{m.kind}</span>
+                  </div>
                 </div>
               ))}
             </div>

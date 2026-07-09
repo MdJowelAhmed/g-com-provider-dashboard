@@ -74,7 +74,7 @@ function formatMoney(n: number) {
   if (n >= 10_000) return `$${(n / 1000).toFixed(1)}K`
   return new Intl.NumberFormat(undefined, {
     style: 'currency',
-    currency: 'USD',
+    currency: 'GHS',
     maximumFractionDigits: 0,
   }).format(n)
 }
@@ -222,14 +222,14 @@ export default function Overview() {
           <div className="flex-1 text-accent-amber">
             <div className="font-medium">Finish setting up payouts</div>
             <p className="mt-0.5 text-xs text-accent-amber/80">
-              Connect Stripe to start receiving payments from customers.
+              Connect Mobile Money to start receiving payments from customers.
             </p>
           </div>
           <Link
             to={`/dashboard/${user.role}/withdraw`}
             className="flex h-8 items-center rounded-md bg-accent-amber px-3 text-xs font-semibold text-gray-900 hover:bg-accent-amber/90"
           >
-            Connect Stripe
+            Connect Mobile Money
           </Link>
         </div>
       )}
@@ -574,7 +574,7 @@ function PayoutCard({ role }: { role: Role }) {
         <div className="text-3xl font-semibold text-accent-success">
           {new Intl.NumberFormat(undefined, {
             style: 'currency',
-            currency: 'USD',
+            currency: 'GHS',
           }).format(payout.available)}
         </div>
       </div>

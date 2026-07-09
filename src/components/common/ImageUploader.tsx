@@ -5,7 +5,7 @@ import {
     type ChangeEvent,
   } from 'react'
   import { message } from 'antd'
-  import { ImagePlus, Loader2 } from 'lucide-react'
+  import { ImagePlus, Loader2, Video } from 'lucide-react'
   import {
     uploadImageFile,
     useGetPresignedUploadUrlMutation,
@@ -20,6 +20,7 @@ import {
     required?: boolean
     disabled?: boolean
     accept?: string
+    allowVideo?: boolean
     hint?: string
     className?: string
     heightClass?: string
@@ -34,17 +35,28 @@ import {
     required = false,
     disabled = false,
     accept = 'image/*',
+    allowVideo = false,
     hint = 'PNG, JPG, or WEBP',
     className = '',
     heightClass = 'h-48',
   }: ImageUploaderProps) {
     const fileInput = useRef<HTMLInputElement>(null)
     const [previewUrl, setPreviewUrl] = useState(value)
+    const [previewType, setPreviewType] = useState<'image' | 'video' | null>(null)
     const [isUploading, setIsUploading] = useState(false)
     const [getPresignedUrl] = useGetPresignedUploadUrlMutation()
+
+    const inferPreviewType = (url: string): 'image' | 'video' | null => {
+      if (!url) return null
+      const lowered = url.toLowerCase()
+      const videoExt = ['.mp4', '.mov', '.webm', '.mkv', '.avi', '.m4v']
+      if (videoExt.some((ext) => lowered.includes(ext))) return 'video'
+      return 'image'
+    }
   
     useEffect(() => {
       setPreviewUrl(value)
+      setPreviewType(inferPreviewType(value))
     }, [value])
   
     useEffect(() => {
@@ -57,6 +69,7 @@ import {
   
     const setLocalPreview = (file: File) => {
       const localPreview = URL.createObjectURL(file)
+      setPreviewType(file.type.startsWith('video/') ? 'video' : 'image')
   
       setPreviewUrl((prev) => {
         if (prev.startsWith('blob:')) {
@@ -73,6 +86,7 @@ import {
         }
         return value
       })
+      setPreviewType(inferPreviewType(value))
     }
   
     const onFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -81,8 +95,11 @@ import {
   
       if (!file) return
   
-      if (!file.type.startsWith('image/')) {
-        message.warning('Please select an image file.')
+      const fileIsImage = file.type.startsWith('image/')
+      const fileIsVideo = file.type.startsWith('video/')
+      const canUseVideo = allowVideo || accept.includes('video/')
+      if (!fileIsImage && !(canUseVideo && fileIsVideo)) {
+        message.warning(canUseVideo ? 'Please select an image or video file.' : 'Please select an image file.')
         return
       }
   
@@ -110,13 +127,13 @@ import {
   
         onChange?.(publicUrl)
         onFileSelect?.(null)
-        message.success('Image uploaded successfully.')
+        message.success(fileIsVideo ? 'Video uploaded successfully.' : 'Image uploaded successfully.')
       } catch (error) {
         resetPreview()
         onFileSelect?.(null)
   
         const errorMessage =
-          error instanceof Error ? error.message : 'Image upload failed.'
+          error instanceof Error ? error.message : fileIsVideo ? 'Video upload failed.' : 'Image upload failed.'
         message.error(errorMessage)
       } finally {
         setIsUploading(false)
@@ -134,26 +151,30 @@ import {
           {isUploading ? (
             <div className="flex flex-col items-center gap-2 text-gray-300">
               <Loader2 size={28} className="animate-spin" />
-              <span className="text-sm">Uploading image...</span>
+              <span className="text-sm">Uploading media...</span>
             </div>
           ) : previewUrl ? (
             <>
-              <img
-                src={previewUrl}
-                alt=""
-                className="h-full w-full object-cover"
-              />
+              {previewType === 'video' ? (
+                <video src={previewUrl} className="h-full w-full object-cover" controls />
+              ) : (
+                <img
+                  src={previewUrl}
+                  alt=""
+                  className="h-full w-full object-cover"
+                />
+              )}
               <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
                 <span className="flex items-center gap-2 rounded-md bg-black/60 px-3 py-1.5 text-xs font-medium text-white">
-                  <ImagePlus size={14} />
-                  Change image
+                  {previewType === 'video' ? <Video size={14} /> : <ImagePlus size={14} />}
+                  Change media
                 </span>
               </div>
             </>
           ) : (
             <div className="flex flex-col items-center gap-2 px-4 text-center text-gray-300">
-              <ImagePlus size={28} />
-              <span className="text-sm">Click to select image</span>
+              {allowVideo ? <Video size={28} /> : <ImagePlus size={28} />}
+              <span className="text-sm">{allowVideo ? 'Click to select image/video' : 'Click to select image'}</span>
               <span className="text-[11px] text-gray-500">{hint}</span>
             </div>
           )}

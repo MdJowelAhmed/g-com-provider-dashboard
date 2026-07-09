@@ -6,9 +6,8 @@ import {
   uploadImageFile,
   useGetPresignedUploadUrlMutation,
 } from '../../../redux/api/imageUploadApi'
-import { useGetServicesQuery } from '../../../redux/api/serviceApi'
-import { mapServiceFromApi } from '../../../pages/dashboard/services/serviceMapping'
 import type { RolePostConfig } from '../config/rolePostConfig'
+import { useHubPostItemCatalog } from '../hooks/useHubPostItemCatalog'
 import type { Post, PostFormValues } from '../types'
 import { HUB_POST_PANEL_OPTIONS, postToFormValues } from '../utils/hubPostMapping'
 import { postFieldClass, postLabelClass, postTextareaClass } from './postFormFieldClasses'
@@ -35,39 +34,27 @@ function blankForm(): PostFormValues {
   }
 }
 
-function formatServiceLabel(name: string, code: string) {
-  return code ? `${name} (${code})` : name
-}
-
 export default function PostFormModal({
   open,
   mode,
   initialPost,
-  config: _config,
+  config,
   submitting = false,
   onCancel,
   onSubmit,
 }: Props) {
-  void _config
   const [form] = Form.useForm<PostFormValues>()
-  const [pendingImageFile, setPendingImageFile] = useState<File | null>(null)
-  const [isUploadingImage, setIsUploadingImage] = useState(false)
+  const [pendingMediaFile, setPendingMediaFile] = useState<File | null>(null)
+  const [isUploadingMedia, setIsUploadingMedia] = useState(false)
   const [getPresignedUrl] = useGetPresignedUploadUrlMutation()
 
-  const { data: servicesData, isLoading: servicesLoading } = useGetServicesQuery(
-    { page: 1, limit: 100 },
-    { skip: !open },
-  )
+  const { itemLabel, items, isLoading: catalogLoading } = useHubPostItemCatalog(config.role)
 
-  const services = useMemo(
-    () => (servicesData?.data ?? []).map((doc) => mapServiceFromApi(doc)),
-    [servicesData?.data],
-  )
-
-  const serviceOptions = useMemo(() => {
-    const options = services.map((service) => ({
-      value: service.id,
-      label: formatServiceLabel(service.name, service.serviceCode),
+  const itemOptions = useMemo(() => {
+    const options = items.map((item) => ({
+      value: item.id,
+      label: item.label,
+      price: item.price,
     }))
 
     if (mode === 'edit' && initialPost?.itemId) {
@@ -75,62 +62,63 @@ export default function PostFormModal({
       if (!exists) {
         options.unshift({
           value: initialPost.itemId,
-          label: `Unknown service (${initialPost.itemId.slice(0, 8)}…)`,
+          label: `Unknown ${itemLabel.toLowerCase()} (${initialPost.itemId.slice(0, 8)}…)`,
+          price: initialPost.itemPrice,
         })
       }
     }
 
     return options
-  }, [services, mode, initialPost?.itemId])
+  }, [items, mode, initialPost?.itemId, initialPost?.itemPrice, itemLabel])
 
   useEffect(() => {
     if (!open) {
-      setPendingImageFile(null)
-      setIsUploadingImage(false)
+      setPendingMediaFile(null)
+      setIsUploadingMedia(false)
     }
   }, [open])
 
   useEffect(() => {
     if (!open) return
     if (mode === 'edit' && initialPost) {
-      setPendingImageFile(null)
+      setPendingMediaFile(null)
       form.setFieldsValue(postToFormValues(initialPost))
     } else {
-      setPendingImageFile(null)
+      setPendingMediaFile(null)
       form.setFieldsValue(blankForm())
     }
   }, [open, mode, initialPost, form])
 
-  const handleServiceChange = (serviceId: string) => {
-    const service = services.find((entry) => entry.id === serviceId)
-    if (service) {
-      form.setFieldValue('itemPrice', String(service.price))
+  const handleItemChange = (itemId: string) => {
+    const item = itemOptions.find((entry) => entry.value === itemId)
+    if (item) {
+      form.setFieldValue('itemPrice', String(item.price))
     }
   }
 
   const handleFinish = async (v: PostFormValues) => {
     let mediaUrl = v.media?.trim() ?? ''
 
-    if (pendingImageFile) {
-      setIsUploadingImage(true)
+    if (pendingMediaFile) {
+      setIsUploadingMedia(true)
       try {
-        mediaUrl = await uploadImageFile(pendingImageFile, async (payload) => {
+        mediaUrl = await uploadImageFile(pendingMediaFile, async (payload) => {
           const result = await getPresignedUrl(payload).unwrap()
           return result
         })
-        setPendingImageFile(null)
+        setPendingMediaFile(null)
       } catch (error) {
         const errorMessage =
-          error instanceof Error ? error.message : 'Image upload failed.'
+          error instanceof Error ? error.message : 'Media upload failed.'
         message.error(errorMessage)
         return
       } finally {
-        setIsUploadingImage(false)
+        setIsUploadingMedia(false)
       }
     }
 
     if (!mediaUrl) {
-      message.error('Please select a media image.')
+      message.error('Please select a media file.')
       return
     }
 
@@ -145,7 +133,10 @@ export default function PostFormModal({
     })
   }
 
-  const isBusy = submitting || isUploadingImage
+  const isBusy = submitting || isUploadingMedia
+  const selectPlaceholder = catalogLoading
+    ? `Loading ${itemLabel.toLowerCase()}s…`
+    : `Select a ${itemLabel.toLowerCase()}`
 
   return (
     <Modal
@@ -176,18 +167,16 @@ export default function PostFormModal({
         >
           <Form.Item
             name="itemId"
-            label={<span className={postLabelClass}>Service</span>}
-            rules={[{ required: true, message: 'Select a service' }]}
+            label={<span className={postLabelClass}>{itemLabel}</span>}
+            rules={[{ required: true, message: `Select a ${itemLabel.toLowerCase()}` }]}
           >
             <select
               className={postFieldClass}
-              disabled={servicesLoading}
-              onChange={(event) => handleServiceChange(event.target.value)}
+              disabled={catalogLoading}
+              onChange={(event) => handleItemChange(event.target.value)}
             >
-              <option value="">
-                {servicesLoading ? 'Loading services…' : 'Select a service'}
-              </option>
-              {serviceOptions.map((option) => (
+              <option value="">{selectPlaceholder}</option>
+              {itemOptions.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
                 </option>
@@ -274,21 +263,23 @@ export default function PostFormModal({
 
           <Form.Item
             name="media"
-            label={<span className={postLabelClass}>Media image</span>}
+            label={<span className={postLabelClass}>Media (image/video)</span>}
             rules={[
               {
                 validator: async () => {
                   const current = form.getFieldValue('media') as string | undefined
-                  if (current?.trim() || pendingImageFile) return
-                  throw new Error('Media image is required')
+                  if (current?.trim() || pendingMediaFile) return
+                  throw new Error('Media file is required')
                 },
               },
             ]}
           >
             <ImageUploader
               autoUpload={false}
-              hint="Image uploads when you post"
-              onFileSelect={setPendingImageFile}
+              allowVideo
+              accept="image/*,video/*"
+              hint="Image or video uploads when you post"
+              onFileSelect={setPendingMediaFile}
             />
           </Form.Item>
 
@@ -308,8 +299,8 @@ export default function PostFormModal({
               whileTap={isBusy ? undefined : { scale: 0.98 }}
               className="h-10 rounded-xl bg-brand px-6 text-sm font-semibold text-white shadow-lg shadow-brand/20 ring-1 ring-brand/30 transition hover:bg-brand-hover disabled:opacity-50"
             >
-              {isUploadingImage
-                ? 'Uploading image…'
+              {isUploadingMedia
+                ? 'Uploading media…'
                 : submitting
                   ? 'Saving…'
                   : mode === 'edit'

@@ -26,7 +26,7 @@ const allFilter = '__all__'
 
 function formatPrice(n: number | null | undefined) {
   if (n === null || n === undefined) return '—'
-  return `$${n.toFixed(2)}`
+  return `GH₵ ${n.toFixed(2)}`
 }
 
 function formatDateTime(value: string | null | undefined) {

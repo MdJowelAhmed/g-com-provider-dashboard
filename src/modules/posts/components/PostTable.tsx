@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { ArrowDown, ArrowUp, ArrowUpDown, ImageOff } from 'lucide-react'
+import { ArrowDown, ArrowUp, ArrowUpDown, ImageOff, Play } from 'lucide-react'
 import type { Post, PostMedia, SortKey } from '../types'
 import { getPostDisplayRow } from '../utils/postDisplay'
 import CampaignStatusBadge from './CampaignStatusBadge'
@@ -20,7 +20,8 @@ type Props = {
   onView: (post: Post) => void
   onEdit: (post: Post) => void
   onDelete: (post: Post) => void
-  serviceLabelById?: Map<string, string>
+  itemColumnLabel?: string
+  itemLabelById?: Map<string, string>
 }
 
 function fmtDate(value: string) {
@@ -84,7 +85,8 @@ export default function PostTable({
   onView,
   onEdit,
   onDelete,
-  serviceLabelById,
+  itemColumnLabel = 'Item',
+  itemLabelById,
 }: Props) {
   const colCount = 10
 
@@ -116,7 +118,7 @@ export default function PostTable({
                 onClick={() => onSort('panel')}
               />
               <SortTh
-                label="Service"
+                label={itemColumnLabel}
                 active={sortKey === 'itemId'}
                 dir={sortDir}
                 onClick={() => onSort('itemId')}
@@ -174,8 +176,8 @@ export default function PostTable({
                 const row = getPostDisplayRow(post)
                 const thumb = row.media[0]
                 const selected = selectedIds.includes(post.id)
-                const serviceLabel = serviceLabelById?.get(post.itemId) ?? row.itemLabel
-                const labelForA11y = row.about || serviceLabel || 'post'
+                const itemLabel = itemLabelById?.get(post.itemId) ?? row.itemLabel
+                const labelForA11y = row.about || itemLabel || 'post'
                 return (
                   <motion.tr
                     layout
@@ -202,8 +204,8 @@ export default function PostTable({
                       </div>
                     </td>
                     <td className="max-w-[160px] px-3 py-3.5 align-middle">
-                      <div className="truncate text-gray-200" title={serviceLabel || undefined}>
-                        {serviceLabel || '—'}
+                      <div className="truncate text-gray-200" title={itemLabel || undefined}>
+                        {itemLabel || '—'}
                       </div>
                     </td>
                     <td className="max-w-[220px] px-3 py-3.5 align-middle">
@@ -255,7 +257,18 @@ function Thumb({ thumb }: { thumb: PostMedia | undefined }) {
   if (thumb.kind === 'video') {
     return (
       <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-white/[0.06] bg-black shadow-sm ring-1 ring-white/[0.04] transition group-hover:border-brand/35">
-        <video src={thumb.url} className="h-full w-full object-cover" muted playsInline />
+        <video
+          src={thumb.url}
+          className="h-full w-full object-cover"
+          muted
+          playsInline
+          preload="metadata"
+        />
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/35">
+          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-black/70 text-white">
+            <Play size={12} className="ml-0.5" />
+          </span>
+        </div>
       </div>
     )
   }
