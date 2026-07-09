@@ -73,19 +73,6 @@ export const ROOM_AMENITIES = [
   'Mini Bar',
   'Breakfast Included',
   'Room Service',
-  'Balcony',
-  'Safe',
-  'Bathtub',
-  'Shower',
-  'Hair dryer',
-  'Iron',
-  'Work desk',
-  'Kitchenette',
-  'Coffee maker',
-  'Refrigerator',
-  'Soundproofing',
-  'Blackout curtains',
-  'Wheelchair accessible',
 ]
 
 export const ROOM_STATUS_OPTIONS = [

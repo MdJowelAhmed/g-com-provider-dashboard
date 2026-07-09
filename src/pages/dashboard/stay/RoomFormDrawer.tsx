@@ -105,23 +105,14 @@ export default function RoomFormDrawer({
 
   const subCategoryOptions = useMemo(
     () =>
-      (subCategoriesData?.data ?? []).map((sub) => ({
-        value: sub._id,
-        label: sub.name,
-      })),
+      (subCategoriesData?.data ?? [])
+        .filter((item) => item.status === 'active')
+        .map((sub) => ({
+          value: sub._id,
+          label: sub.name,
+        })),
     [subCategoriesData?.data],
   )
-
-  const maxAdult = Form.useWatch('maxAdult', form)
-  const maxChildren = Form.useWatch('maxChildren', form)
-  const imageValue = Form.useWatch('image', form)
-
-  useEffect(() => {
-    if (maxAdult == null && maxChildren == null) return
-    const adults = Number(maxAdult) || 0
-    const children = Number(maxChildren) || 0
-    form.setFieldValue('totalGuest', adults + children)
-  }, [maxAdult, maxChildren, form])
 
   useEffect(() => {
     if (!open) return
@@ -132,6 +123,16 @@ export default function RoomFormDrawer({
       form.setFieldsValue(blankValues)
     }
   }, [open, mode, initial, form])
+
+  useEffect(() => {
+    if (!open || mode !== 'add') return
+    if (!form.getFieldValue('branch') && branchOptions[0]) {
+      form.setFieldValue('branch', branchOptions[0].value)
+    }
+    if (!form.getFieldValue('businessCategory') && businessCategoryOptions[0]) {
+      form.setFieldValue('businessCategory', businessCategoryOptions[0].value)
+    }
+  }, [open, mode, form, branchOptions, businessCategoryOptions])
 
   const handleOk = async () => {
     try {
@@ -153,6 +154,11 @@ export default function RoomFormDrawer({
         } finally {
           setIsUploadingImage(false)
         }
+      }
+
+      if (!imageUrl) {
+        message.error('Please select a room image.')
+        return
       }
 
       await onSubmit({
@@ -182,7 +188,11 @@ export default function RoomFormDrawer({
             Cancel
           </Button>
           <Button type="primary" onClick={handleOk} loading={busy}>
-            {mode === 'edit' ? 'Save changes' : 'Add room'}
+            {isUploadingImage
+              ? 'Uploading image…'
+              : mode === 'edit'
+                ? 'Save changes'
+                : 'Add room'}
           </Button>
         </Space>
       }
@@ -192,6 +202,15 @@ export default function RoomFormDrawer({
           Basic info
         </Divider>
         <Row gutter={16}>
+          <Col span={16}>
+            <Form.Item
+              name="name"
+              label="Name"
+              rules={[{ required: true, message: 'Name is required' }]}
+            >
+              <Input placeholder="Deluxe Ocean View Room" />
+            </Form.Item>
+          </Col>
           <Col span={8}>
             <Form.Item
               name="roomNumber"
@@ -199,15 +218,6 @@ export default function RoomFormDrawer({
               rules={[{ required: true, message: 'Room number is required' }]}
             >
               <Input placeholder="A-101" />
-            </Form.Item>
-          </Col>
-          <Col span={16}>
-            <Form.Item
-              name="name"
-              label="Display name"
-              rules={[{ required: true, message: 'Name is required' }]}
-            >
-              <Input placeholder="Deluxe Ocean View Room" />
             </Form.Item>
           </Col>
           <Col span={8}>
@@ -229,13 +239,24 @@ export default function RoomFormDrawer({
             </Form.Item>
           </Col>
           <Col span={8}>
-            <Form.Item name="size" label="Size">
+            <Form.Item
+              name="size"
+              label="Size"
+              rules={[{ required: true, message: 'Size is required' }]}
+            >
               <Input placeholder="450 sqft" />
             </Form.Item>
           </Col>
           <Col span={24}>
-            <Form.Item name="description" label="Description">
-              <Input.TextArea rows={3} placeholder="Describe the room" />
+            <Form.Item
+              name="description"
+              label="Description"
+              rules={[{ required: true, message: 'Description is required' }]}
+            >
+              <Input.TextArea
+                rows={3}
+                placeholder="Spacious deluxe room with ocean view, private balcony, and premium facilities."
+              />
             </Form.Item>
           </Col>
         </Row>
@@ -244,7 +265,7 @@ export default function RoomFormDrawer({
           Beds & capacity
         </Divider>
         <Row gutter={16}>
-          <Col span={10}>
+          <Col span={8}>
             <Form.Item
               name="bedType"
               label="Bed type"
@@ -253,40 +274,15 @@ export default function RoomFormDrawer({
               <Select options={BED_TYPE_OPTIONS.map((b) => ({ value: b, label: b }))} />
             </Form.Item>
           </Col>
-          <Col span={4}>
+          <Col span={8}>
             <Form.Item
               name="bedCount"
               label="Bed count"
-              rules={[{ required: true, message: 'Enter bed count' }]}
+              rules={[{ required: true, message: 'Bed count is required' }]}
             >
               <InputNumber min={1} style={{ width: '100%' }} />
             </Form.Item>
           </Col>
-          <Col span={5}>
-            <Form.Item
-              name="maxAdult"
-              label="Max adults"
-              rules={[{ required: true, message: 'Enter max adults' }]}
-            >
-              <InputNumber min={1} style={{ width: '100%' }} />
-            </Form.Item>
-          </Col>
-          <Col span={5}>
-            <Form.Item name="maxChildren" label="Max children">
-              <InputNumber min={0} style={{ width: '100%' }} />
-            </Form.Item>
-          </Col>
-          <Col span={8}>
-            <Form.Item name="totalGuest" label="Total guests">
-              <InputNumber min={1} style={{ width: '100%' }} readOnly />
-            </Form.Item>
-          </Col>
-        </Row>
-
-        <Divider titlePlacement="start" orientationMargin={0} plain>
-          Pricing & categories
-        </Divider>
-        <Row gutter={16}>
           <Col span={8}>
             <Form.Item
               name="basePrice"
@@ -296,30 +292,65 @@ export default function RoomFormDrawer({
               <InputNumber min={0} step={0.01} style={{ width: '100%' }} />
             </Form.Item>
           </Col>
-          <Col span={8}>
-            <Form.Item name="businessCategory" label="Business category">
+          <Col span={12}>
+            <Form.Item
+              name="maxAdult"
+              label="Max adults"
+              rules={[{ required: true, message: 'Max adults is required' }]}
+            >
+              <InputNumber min={1} style={{ width: '100%' }} />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item name="maxChildren" label="Max children">
+              <InputNumber min={0} style={{ width: '100%' }} />
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Divider titlePlacement="start" orientationMargin={0} plain>
+          Classification
+        </Divider>
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item
+              name="businessCategory"
+              label="Business category"
+              rules={[{ required: true, message: 'Select a business category' }]}
+            >
               <Select
-                allowClear
-                placeholder="Select category"
+                showSearch
+                optionFilterProp="label"
+                placeholder="Select business category"
                 loading={categoriesLoading}
                 options={businessCategoryOptions}
               />
             </Form.Item>
           </Col>
-          <Col span={8}>
-            <Form.Item name="subCategory" label="Sub category">
+          <Col span={12}>
+            <Form.Item
+              name="subCategory"
+              label="Sub category"
+              rules={[{ required: true, message: 'Select a sub category' }]}
+            >
               <Select
-                allowClear
+                showSearch
+                optionFilterProp="label"
                 placeholder="Select sub category"
                 loading={subCategoriesLoading}
                 options={subCategoryOptions}
               />
             </Form.Item>
           </Col>
-          <Col span={12}>
-            <Form.Item name="branch" label="Branch">
+          <Col span={24}>
+            <Form.Item
+              name="branch"
+              label="Branch"
+              rules={[{ required: true, message: 'Select a branch' }]}
+            >
               <Select
-                allowClear
+                showSearch
+                optionFilterProp="label"
                 placeholder="Select branch"
                 loading={shopsLoading}
                 options={branchOptions}
@@ -336,17 +367,34 @@ export default function RoomFormDrawer({
             <Form.Item name="otherAmenities" label="Other amenities">
               <Checkbox.Group
                 options={ROOM_AMENITIES.map((a) => ({ value: a, label: a }))}
-                style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 4 }}
+                style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 4 }}
               />
             </Form.Item>
           </Col>
           <Col span={24}>
-            <Form.Item name="image" label="Room image">
+            <Form.Item
+              name="image"
+              label="Image"
+              rules={[
+                {
+                  validator: async () => {
+                    const current = form.getFieldValue('image') as string | undefined
+                    if (current?.trim() || pendingImageFile) return
+                    throw new Error('Image is required')
+                  },
+                },
+              ]}
+            >
               <ImageUploader
-                value={imageValue ?? ''}
+                value={form.getFieldValue('image')}
+                autoUpload={false}
+                onFileSelect={(file) => {
+                  setPendingImageFile(file ?? null)
+                  form.setFields([{ name: 'image', errors: [] }])
+                }}
                 onChange={(url) => form.setFieldValue('image', url)}
-                onFileSelect={setPendingImageFile}
-                hint="Image uploads when you save the room"
+                hint="Select image — uploads when you save the room"
+                heightClass="h-40"
               />
             </Form.Item>
           </Col>
