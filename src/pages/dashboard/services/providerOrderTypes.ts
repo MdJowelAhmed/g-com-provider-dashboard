@@ -106,13 +106,12 @@ export type ProviderOrder = {
 }
 
 export const ORDER_STATUS_OPTIONS = [
-  { value: 'pending', label: 'Pending' },
-  { value: 'payment_created', label: 'Payment created' },
-  { value: 'paid', label: 'Paid' },
-  { value: 'confirmed', label: 'Confirmed' },
+ 
+  // { value: 'pending', label: 'Pending' },
   { value: 'in_progress', label: 'In progress' },
   { value: 'completed', label: 'Completed' },
-  { value: 'cancelled', label: 'Cancelled' },
+  { value: 'disputed', label: 'Disputed' },
+  { value: 'refunded', label: 'Refunded' },
 ] as const
 
 export const ORDER_PAYMENT_STATUS_OPTIONS = [

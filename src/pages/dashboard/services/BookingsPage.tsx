@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { message } from 'antd'
-import { Eye, Loader2, Search, Star } from 'lucide-react'
+import { Eye, Loader2, Star } from 'lucide-react'
 import { useAuth } from '../../../context/AuthContext'
 import {
   useBookingCompletedMutation,
@@ -10,6 +10,8 @@ import {
 } from '../../../redux/api/myBookingApi'
 import { BUSINESS_MAIN_CATEGORIES } from '../../../types/businessCategory'
 import PageHeader from '../../../components/dashboard/PageHeader'
+import SearchField from '../../../components/common/SearchField'
+import { useSearchField } from '../../../hooks/useSearchField'
 import CompleteOrderModal from './CompleteOrderModal'
 import DeliverOrderModal from './DeliverOrderModal'
 import ProviderOrderDrawer from './ProviderOrderDrawer'
@@ -18,7 +20,6 @@ import {
   formatDateTime,
   formatMoney,
   mapProviderOrdersFromApi,
-  ORDER_PAYMENT_STATUS_OPTIONS,
   ORDER_STATUS_OPTIONS,
   pageCopyForCategory,
   paymentStatusLabel,
@@ -49,57 +50,33 @@ export default function BookingsPage() {
   const category = categoryFromProfile(user?.extra?.category)
   const copy = pageCopyForCategory(category)
 
-  const [search, setSearch] = useState('')
+  const { inputValue, setInputValue, searchTerm, clear, flush, isDebouncing } = useSearchField({
+    minChars: 2,
+  })
   const [statusFilter, setStatusFilter] = useState<string>(allFilter)
-  const [paymentFilter, setPaymentFilter] = useState<string>(allFilter)
   const [openId, setOpenId] = useState<string | null>(null)
   const [deliverOrder, setDeliverOrder] = useState<ProviderOrder | null>(null)
   const [completeOrder, setCompleteOrder] = useState<ProviderOrder | null>(null)
   const [actionBusyId, setActionBusyId] = useState<string | null>(null)
   const [actionBusyType, setActionBusyType] = useState<'ship' | 'deliver' | 'complete' | null>(null)
 
-  const { data, isLoading, isError } = useGetProviderOrdersQuery({
+  const { data, isLoading, isFetching, isError } = useGetProviderOrdersQuery({
     page: 1,
     limit: 50,
+    ...(searchTerm ? { searchTerm } : {}),
+    ...(statusFilter !== allFilter ? { status: statusFilter } : {}),
   })
   const [shipBooking] = useBookingShippedMutation()
   const [deliverBooking] = useBookingDeliveredMutation()
   const [completeBooking] = useBookingCompletedMutation()
 
   const orders = useMemo(
-    () => mapProviderOrdersFromApi(data?.data ?? [], category),
+    () =>
+      mapProviderOrdersFromApi(data?.data ?? [], category).sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      ),
     [data?.data, category],
   )
-
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    return orders
-      .filter((order) => {
-        if (statusFilter !== allFilter && order.status !== statusFilter) return false
-        if (paymentFilter !== allFilter && order.paymentStatus !== paymentFilter) return false
-        if (!q) return true
-        return (
-          order.orderId.toLowerCase().includes(q) ||
-          order.customer.name.toLowerCase().includes(q) ||
-          order.customer.email.toLowerCase().includes(q) ||
-          order.customer.phone.toLowerCase().includes(q) ||
-          order.summaryLabel.toLowerCase().includes(q) ||
-          (order.summaryMeta?.toLowerCase().includes(q) ?? false) ||
-          (order.stayDetails?.roomNumber.toLowerCase().includes(q) ?? false)
-        )
-      })
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-  }, [orders, search, statusFilter, paymentFilter])
-
-  const totals = useMemo(() => {
-    const pending = orders.filter((order) => order.status === 'pending').length
-    const paid = orders.filter((order) => order.paymentStatus === 'paid').length
-    const completed = orders.filter((order) => order.status === 'completed').length
-    const revenue = orders
-      .filter((order) => order.paymentStatus === 'paid')
-      .reduce((sum, order) => sum + order.providerAmount, 0)
-    return { total: orders.length, pending, paid, completed, revenue }
-  }, [orders])
 
   const selected = openId ? orders.find((order) => order.id === openId) ?? null : null
 
@@ -163,28 +140,19 @@ export default function BookingsPage() {
     <div>
       <PageHeader title={copy.title} description={copy.description} />
 
-      {/* <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
-        <SummaryTile label="Total" value={totals.total} tone="neutral" />
-        <SummaryTile label="Pending" value={totals.pending} tone="warning" />
-        <SummaryTile label="Paid" value={totals.paid} tone="success" />
-        <SummaryTile label="Completed" value={totals.completed} tone="info" />
-        <SummaryTile label="Revenue" value={formatMoney(totals.revenue)} tone="success" compact />
-      </div> */}
-
+ 
+    
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <div className="relative min-w-[240px] flex-1">
-          <Search
-            size={14}
-            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"
-          />
-          <input
-            type="text"
-            placeholder={copy.searchPlaceholder}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="h-10 w-[300px] rounded-md border border-surface-border bg-surface-card pl-9 pr-3 text-sm text-gray-100 placeholder:text-gray-500 focus:border-brand focus:outline-none"
-          />
-        </div>
+        <SearchField
+          value={inputValue}
+          onChange={setInputValue}
+          onClear={clear}
+          onFlush={flush}
+          minChars={2}
+          loading={isDebouncing || ((isLoading || isFetching) && Boolean(searchTerm))}
+          placeholder={copy.searchPlaceholder}
+          aria-label="Search bookings"
+        />
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
@@ -197,22 +165,10 @@ export default function BookingsPage() {
             </option>
           ))}
         </select>
-        <select
-          value={paymentFilter}
-          onChange={(e) => setPaymentFilter(e.target.value)}
-          className="h-10 rounded-md border border-surface-border bg-surface-card px-3 text-sm text-gray-100 focus:border-brand focus:outline-none"
-        >
-          <option value={allFilter}>All payments</option>
-          {ORDER_PAYMENT_STATUS_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
       </div>
 
       <div className="overflow-hidden rounded-xl border border-surface-border bg-surface-card">
-        {isLoading ? (
+        {isLoading || isFetching ? (
           <div className="flex items-center justify-center gap-2 px-4 py-16 text-sm text-gray-500">
             <Loader2 size={18} className="animate-spin" />
             Loading {copy.title.toLowerCase()}…
@@ -238,14 +194,14 @@ export default function BookingsPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.length === 0 ? (
+                {orders.length === 0 ? (
                   <tr>
                     <td colSpan={9} className="px-4 py-10 text-center text-gray-500">
                       {copy.emptyLabel}
                     </td>
                   </tr>
                 ) : (
-                  filtered.map((order) => (
+                  orders.map((order) => (
                     <OrderRow
                       key={order.id}
                       order={order}
@@ -465,36 +421,3 @@ function getScheduleText(
   return formatDateTime(order.createdAt)
 }
 
-function SummaryTile({
-  label,
-  value,
-  tone,
-  compact,
-}: {
-  label: string
-  value: number | string
-  tone: 'neutral' | 'success' | 'warning' | 'danger' | 'muted' | 'info' | 'brand'
-  compact?: boolean
-}) {
-  const toneClass: Record<typeof tone, string> = {
-    neutral: 'text-gray-100',
-    success: 'text-accent-success',
-    warning: 'text-accent-amber',
-    danger: 'text-accent-danger',
-    muted: 'text-gray-400',
-    info: 'text-blue-400',
-    brand: 'text-brand-cream',
-  }
-  return (
-    <div className="rounded-xl border border-surface-border bg-surface-card px-4 py-3">
-      <div className="text-xs uppercase tracking-wide text-gray-500">{label}</div>
-      <div
-        className={`mt-1 font-semibold ${toneClass[tone]} ${
-          compact ? 'text-lg' : 'text-xl'
-        }`}
-      >
-        {value}
-      </div>
-    </div>
-  )
-}

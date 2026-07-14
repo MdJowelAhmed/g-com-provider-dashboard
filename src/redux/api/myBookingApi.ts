@@ -176,6 +176,7 @@ export interface GetProviderOrdersParams {
   limit?: number
   searchTerm?: string
   paymentStatus?: string
+  status?: string
 }
 
 export interface BookingShippedPayload {

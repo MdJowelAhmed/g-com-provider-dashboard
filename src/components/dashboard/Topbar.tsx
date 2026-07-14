@@ -30,8 +30,8 @@ export default function Topbar({ user }: Props) {
   }
 
   return (
-    <header className="flex h-16 shrink-0 items-center justify-between border-b border-surface-border bg-surface-page px-6">
-      <div className="relative max-w-sm flex-1">
+    <header className="flex h-16 shrink-0 items-center justify-end border-b border-surface-border bg-surface-page px-6">
+      {/* <div className="relative max-w-sm flex-1">
         <Search
           size={16}
           className="pointer-events-none absolute inset-y-0 left-3 my-auto text-gray-500"
@@ -41,7 +41,7 @@ export default function Topbar({ user }: Props) {
           placeholder="Search..."
           className="h-9 w-full rounded-md border border-surface-border bg-surface-card pl-9 pr-3 text-sm text-gray-100 placeholder:text-gray-500 outline-none focus:border-brand"
         />
-      </div>
+      </div> */}
 
       <div className="flex items-center gap-4">
         {!user.stripeConnected && (
