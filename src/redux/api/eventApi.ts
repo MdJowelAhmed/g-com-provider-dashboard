@@ -64,6 +64,7 @@ export interface EventsListResponse {
 export interface GetEventsParams {
   page?: number
   limit?: number
+  searchTerm?: string
 }
 
 export interface EventPayload {

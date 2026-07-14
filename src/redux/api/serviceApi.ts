@@ -53,6 +53,7 @@ export interface ServicesListResponse {
 export interface GetServicesParams {
   page?: number
   limit?: number
+  searchTerm?: string
 }
 
 export interface ServicePayload {

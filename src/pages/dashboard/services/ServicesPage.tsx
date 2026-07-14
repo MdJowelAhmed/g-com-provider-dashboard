@@ -1,8 +1,10 @@
 import { useMemo, useState } from 'react'
-import { Plus, Search, Pencil, Trash2, ImageOff, Clock } from 'lucide-react'
+import { Plus, Pencil, Trash2, ImageOff, Clock } from 'lucide-react'
 import { Modal, message } from 'antd'
 import type { FetchBaseQueryError } from '@reduxjs/toolkit/query'
 import PageHeader from '../../../components/dashboard/PageHeader'
+import SearchField from '../../../components/common/SearchField'
+import { useSearchField } from '../../../hooks/useSearchField'
 import ServiceFormDrawer from './ServiceFormDrawer'
 import { PRICING_TYPE_OPTIONS, type Service, type ServiceFormValues } from './serviceTypes'
 import { formValuesToServicePayload, mapServiceFromApi } from './serviceMapping'
@@ -46,10 +48,16 @@ function pricingLabel(t: Service['pricingType']) {
 
 export default function ServicesPage() {
   const [modal, setModal] = useState<ModalState>({ mode: 'closed' })
-  const [search, setSearch] = useState('')
   const [pricingFilter, setPricingFilter] = useState<string>(allFilter)
+  const { inputValue, setInputValue, searchTerm, clear, flush, isDebouncing } =
+    useSearchField({ minChars: 2 })
 
-  const { data, isLoading, isFetching, isError } = useGetServicesQuery({ page: 1, limit: 100 })
+  const { data, isLoading, isFetching, isError } = useGetServicesQuery({
+    page: 1,
+    limit: 100,
+    ...(searchTerm ? { searchTerm } : {}),
+    ...(pricingFilter !== allFilter ? { pricingType: pricingFilter } : {}),
+  })
   const { data: shopsData } = useGetShopsQuery({ page: 1, limit: 100 })
   const { data: categoriesData } = useGetBusinessCategoriesQuery()
   const { nameById: subCategoryNameById, platformById: subCategoryPlatformById } =
@@ -80,31 +88,10 @@ export default function ServicesPage() {
     [data?.data],
   )
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    return services.filter((s) => {
-      if (pricingFilter !== allFilter && s.pricingType !== pricingFilter) return false
-      if (!q) return true
-      const branchName = branchNameById.get(s.branchId) ?? ''
-      const categoryName = businessCategoryNameById.get(s.businessCategoryId) ?? ''
-      const subName = subCategoryNameById.get(s.subCategoryId) ?? ''
-      return (
-        s.name.toLowerCase().includes(q) ||
-        s.serviceCode.toLowerCase().includes(q) ||
-        s.description.toLowerCase().includes(q) ||
-        branchName.toLowerCase().includes(q) ||
-        categoryName.toLowerCase().includes(q) ||
-        subName.toLowerCase().includes(q)
-      )
-    })
-  }, [
-    services,
-    search,
-    pricingFilter,
-    branchNameById,
-    businessCategoryNameById,
-    subCategoryNameById,
-  ])
+  // const filtered = useMemo(() => {
+  //   if (pricingFilter === allFilter) return services
+  //   return services.filter((s) => s.pricingType === pricingFilter)
+  // }, [services, pricingFilter])
 
   const totals = useMemo(() => {
     const fixed = services.filter((s) => s.pricingType === 'fixed').length
@@ -173,26 +160,19 @@ export default function ServicesPage() {
         }
       />
 
-      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <SummaryTile label="Total" value={totals.total} tone="neutral" />
-        <SummaryTile label="Fixed price" value={totals.fixed} tone="success" />
-        <SummaryTile label="Per hour" value={totals.perHour} tone="warning" />
-      </div>
+    
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <div className="relative min-w-[220px] flex-1">
-          <Search
-            size={14}
-            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"
-          />
-          <input
-            type="text"
-            placeholder="Search by name, code, branch, or category"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="h-10 w-full rounded-md border border-surface-border bg-surface-card pl-9 pr-3 text-sm text-gray-100 placeholder:text-gray-500 focus:border-brand focus:outline-none"
-          />
-        </div>
+        <SearchField
+          value={inputValue}
+          onChange={setInputValue}
+          onClear={clear}
+          onFlush={flush}
+          loading={isDebouncing || ((isLoading || isFetching) && Boolean(searchTerm))}
+          minChars={2}
+          placeholder="Search by name, code, branch, or category"
+          aria-label="Search services"
+        />
         <select
           value={pricingFilter}
           onChange={(e) => setPricingFilter(e.target.value)}
@@ -235,14 +215,14 @@ export default function ServicesPage() {
                     Loading services…
                   </td>
                 </tr>
-              ) : filtered.length === 0 ? (
+              ) : services?.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="px-4 py-10 text-center text-gray-500">
                     No services match your filters.
                   </td>
                 </tr>
               ) : (
-                filtered.map((s) => (
+                services?.map((s) => (
                   <tr
                     key={s.id}
                     className="border-b border-surface-border last:border-b-0 hover:bg-surface-elevated"

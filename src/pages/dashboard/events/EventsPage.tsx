@@ -1,8 +1,10 @@
 import { useMemo, useState } from 'react'
-import { Plus, Search, Pencil, Trash2, ImageOff, Calendar, Users } from 'lucide-react'
+import { Plus, Pencil, Trash2, ImageOff, Calendar, Users } from 'lucide-react'
 import { Modal, message } from 'antd'
 import type { FetchBaseQueryError } from '@reduxjs/toolkit/query'
 import PageHeader from '../../../components/dashboard/PageHeader'
+import SearchField from '../../../components/common/SearchField'
+import { useSearchField } from '../../../hooks/useSearchField'
 import EventFormDrawer from './EventFormDrawer'
 import { EVENT_STATUS_OPTIONS, type Event, type EventFormValues } from './eventTypes'
 import { formValuesToEventPayload, mapEventFromApi } from './eventMapping'
@@ -57,10 +59,15 @@ function statusBadge(status: string) {
 
 export default function EventsPage() {
   const [modal, setModal] = useState<ModalState>({ mode: 'closed' })
-  const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>(allFilter)
+  const { inputValue, setInputValue, searchTerm, clear, flush, isDebouncing } =
+    useSearchField({ minChars: 2 })
 
-  const { data, isLoading, isFetching, isError } = useGetEventsQuery({ page: 1, limit: 100 })
+  const { data, isLoading, isFetching, isError } = useGetEventsQuery({
+    page: 1,
+    limit: 100,
+    ...(searchTerm ? { searchTerm } : {}),
+  })
   const [createEvent, { isLoading: isCreating }] = useCreateEventMutation()
   const [updateEvent, { isLoading: isUpdating }] = useUpdateEventMutation()
   const [deleteEvent] = useDeleteEventMutation()
@@ -68,17 +75,9 @@ export default function EventsPage() {
   const events = useMemo(() => (data?.data ?? []).map((doc) => mapEventFromApi(doc)), [data?.data])
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    return events.filter((event) => {
-      if (statusFilter !== allFilter && event.status !== statusFilter) return false
-      if (!q) return true
-      return (
-        event.name.toLowerCase().includes(q) ||
-        (event.organizerName ?? '').toLowerCase().includes(q) ||
-        (event.branchName ?? '').toLowerCase().includes(q)
-      )
-    })
-  }, [events, search, statusFilter])
+    if (statusFilter === allFilter) return events
+    return events.filter((event) => event.status === statusFilter)
+  }, [events, statusFilter])
 
   const totals = useMemo(() => {
     const active = events.filter((event) => event.status === 'active').length
@@ -156,19 +155,16 @@ export default function EventsPage() {
       </div> */}
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <div className="relative min-w-[240px] flex-1">
-          <Search
-            size={14}
-            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"
-          />
-          <input
-            type="text"
-            placeholder="Search by name, organizer, or branch"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="h-10 w-[300px] rounded-md border border-surface-border bg-surface-card pl-9 pr-3 text-sm text-gray-100 placeholder:text-gray-500 focus:border-brand focus:outline-none"
-          />
-        </div>
+        <SearchField
+          value={inputValue}
+          onChange={setInputValue}
+          onClear={clear}
+          onFlush={flush}
+          loading={isDebouncing || ((isLoading || isFetching) && Boolean(searchTerm))}
+          minChars={2}
+          placeholder="Search by name, organizer, or branch"
+          aria-label="Search events"
+        />
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
