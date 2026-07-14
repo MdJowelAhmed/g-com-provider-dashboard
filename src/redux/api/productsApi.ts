@@ -51,6 +51,7 @@ export interface ProductsListResponse {
 export interface GetProductsParams {
   page?: number
   limit?: number
+  searchTerm?: string
 }
 
 export interface ProductPayload {
