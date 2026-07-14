@@ -148,12 +148,12 @@ export default function EventsPage() {
         }
       />
 
-      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      {/* <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <SummaryTile label="Total" value={totals.total} tone="neutral" />
         <SummaryTile label="Active" value={totals.active} tone="success" />
         <SummaryTile label="Booked" value={totals.booked} tone="info" />
         <SummaryTile label="Capacity" value={totals.capacity} tone="brand" />
-      </div>
+      </div> */}
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <div className="relative min-w-[240px] flex-1">
@@ -166,7 +166,7 @@ export default function EventsPage() {
             placeholder="Search by name, organizer, or branch"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="h-10 w-full rounded-md border border-surface-border bg-surface-card pl-9 pr-3 text-sm text-gray-100 placeholder:text-gray-500 focus:border-brand focus:outline-none"
+            className="h-10 w-[300px] rounded-md border border-surface-border bg-surface-card pl-9 pr-3 text-sm text-gray-100 placeholder:text-gray-500 focus:border-brand focus:outline-none"
           />
         </div>
         <select
