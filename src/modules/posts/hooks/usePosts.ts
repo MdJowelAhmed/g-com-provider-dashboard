@@ -1,5 +1,6 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FetchBaseQueryError } from '@reduxjs/toolkit/query'
+import { useSearchField } from '../../../hooks/useSearchField'
 import type { Role } from '../../../types/role'
 import {
   useCreateHubPostMutation,
@@ -50,7 +51,14 @@ export function getHubPostApiErrorMessage(error: unknown, fallback: string) {
 }
 
 export function usePosts(role: Role, serviceLabelById?: Map<string, string>) {
-  const [search, setSearch] = useState('')
+  const {
+    inputValue,
+    setInputValue,
+    searchTerm,
+    clear: clearSearch,
+    flush,
+    isDebouncing,
+  } = useSearchField({ minChars: 2 })
   const [statusFilter, setStatusFilter] = useState<string>(ALL_FILTER)
   const [sortKey, setSortKey] = useState<SortKey>('updatedAt')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
@@ -61,35 +69,24 @@ export function usePosts(role: Role, serviceLabelById?: Map<string, string>) {
   const { data, isLoading, isFetching, isError } = useGetHubPostsQuery({
     page: 1,
     limit: 100,
+    ...(searchTerm ? { searchTerm } : {}),
+    ...(statusFilter !== ALL_FILTER ? { status: statusFilter } : {}),
   })
   const [createHubPost, { isLoading: isCreating }] = useCreateHubPostMutation()
   const [updateHubPost, { isLoading: isUpdating }] = useUpdateHubPostMutation()
   const [deleteHubPost, { isLoading: isDeleting }] = useDeleteHubPostMutation()
+
+  useEffect(() => {
+    setPage(1)
+  }, [searchTerm, statusFilter])
 
   const posts = useMemo(
     () => (data?.data ?? []).map((doc) => mapHubPostFromApi(doc, role)),
     [data?.data, role],
   )
 
-  const filteredSorted = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    let list = posts.filter((p) => {
-      const row = getPostDisplayRow(p)
-      if (statusFilter !== ALL_FILTER) {
-        if (!row.campaignStatus || row.campaignStatus !== statusFilter) return false
-      }
-      if (!q) return true
-      const serviceName = serviceLabelById?.get(p.itemId) ?? ''
-      return (
-        row.panel.toLowerCase().includes(q) ||
-        row.itemLabel.toLowerCase().includes(q) ||
-        serviceName.toLowerCase().includes(q) ||
-        p.itemId.toLowerCase().includes(q) ||
-        row.about.toLowerCase().includes(q)
-      )
-    })
-
-    list = [...list].sort((a, b) => {
+  const sorted = useMemo(() => {
+    return [...posts].sort((a, b) => {
       const ra = getPostDisplayRow(a)
       const rb = getPostDisplayRow(b)
       switch (sortKey) {
@@ -120,18 +117,16 @@ export function usePosts(role: Role, serviceLabelById?: Map<string, string>) {
           return compareTime(a.updatedAt, b.updatedAt, sortDir)
       }
     })
+  }, [posts, sortKey, sortDir, serviceLabelById])
 
-    return list
-  }, [posts, search, statusFilter, sortKey, sortDir, serviceLabelById])
-
-  const total = filteredSorted.length
+  const total = sorted.length
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
   const effectivePage = Math.min(Math.max(1, page), totalPages)
 
   const paginated = useMemo(() => {
     const start = (effectivePage - 1) * pageSize
-    return filteredSorted.slice(start, start + pageSize)
-  }, [filteredSorted, effectivePage, pageSize])
+    return sorted.slice(start, start + pageSize)
+  }, [sorted, effectivePage, pageSize])
 
   const toggleSort = useCallback((key: SortKey) => {
     setSortKey((prev) => {
@@ -194,8 +189,12 @@ export function usePosts(role: Role, serviceLabelById?: Map<string, string>) {
 
   return {
     posts,
-    search,
-    setSearch,
+    inputValue,
+    setInputValue,
+    searchTerm,
+    clearSearch,
+    flush,
+    isDebouncing,
     statusFilter,
     setStatusFilter,
     sortKey,

@@ -1,37 +1,41 @@
-import { Search } from 'lucide-react'
+import SearchField from '../../../components/common/SearchField'
 import { ALL_FILTER, CAMPAIGN_STATUS_FILTER_OPTIONS } from '../constants'
 
 type Props = {
-  search: string
-  onSearchChange: (v: string) => void
+  value: string
+  onChange: (v: string) => void
+  onClear: () => void
+  onFlush: () => boolean
+  loading?: boolean
   searchPlaceholder: string
   statusFilter: string
   onStatusChange: (v: string) => void
 }
 
 export default function PostFiltersBar({
-  search,
-  onSearchChange,
+  value,
+  onChange,
+  onClear,
+  onFlush,
+  loading = false,
   searchPlaceholder,
   statusFilter,
   onStatusChange,
 }: Props) {
   return (
     <div className="mb-4 flex flex-wrap items-center gap-2">
-      <div className="relative min-w-[220px] flex-1">
-        <Search
-          size={14}
-          className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"
-        />
-        <input
-          type="search"
-          value={search}
-          onChange={(e) => onSearchChange(e.target.value)}
-          placeholder={searchPlaceholder}
-          className="h-10 w-full rounded-md border border-surface-border bg-surface-card/90 pl-9 pr-3 text-sm text-gray-100 shadow-inner backdrop-blur-sm placeholder:text-gray-500 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
-          aria-label="Search posts"
-        />
-      </div>
+      <SearchField
+        value={value}
+        onChange={onChange}
+        onClear={onClear}
+        onFlush={onFlush}
+        minChars={2}
+        loading={loading}
+        placeholder={searchPlaceholder}
+        aria-label="Search posts"
+        widthClass="w-full"
+        className="min-w-[220px] flex-1"
+      />
       <select
         value={statusFilter}
         onChange={(e) => onStatusChange(e.target.value)}

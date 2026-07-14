@@ -119,8 +119,14 @@ export default function PostsManagementShell({
   return (
     <div>
       <PostFiltersBar
-        search={postsApi.search}
-        onSearchChange={postsApi.setSearch}
+        value={postsApi.inputValue}
+        onChange={postsApi.setInputValue}
+        onClear={postsApi.clearSearch}
+        onFlush={postsApi.flush}
+        loading={
+          postsApi.isDebouncing ||
+          ((postsApi.initialLoading || postsApi.isFetching) && Boolean(postsApi.searchTerm))
+        }
         searchPlaceholder={`Search by panel, ${itemLabel.toLowerCase()}, or caption`}
         statusFilter={postsApi.statusFilter}
         onStatusChange={postsApi.setStatusFilter}

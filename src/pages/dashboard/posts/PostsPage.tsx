@@ -24,10 +24,7 @@ export default function PostsPage() {
         description={copy.pageDescription}
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <span className="hidden h-10 items-center gap-2 rounded-md border border-surface-border bg-surface-card px-3 text-xs text-gray-400 lg:inline-flex">
-              <FileText size={16} className="text-brand" />
-              {copy.filterHint}
-            </span>
+          
             <button
               type="button"
               onClick={() => openCreateRef.current()}

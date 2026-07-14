@@ -41,6 +41,8 @@ export interface HubPostsListResponse {
 export interface GetHubPostsParams {
   page?: number
   limit?: number
+  searchTerm?: string
+  status?: string
 }
 
 export interface HubPostPayload {
