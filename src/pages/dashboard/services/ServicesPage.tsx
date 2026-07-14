@@ -88,16 +88,7 @@ export default function ServicesPage() {
     [data?.data],
   )
 
-  // const filtered = useMemo(() => {
-  //   if (pricingFilter === allFilter) return services
-  //   return services.filter((s) => s.pricingType === pricingFilter)
-  // }, [services, pricingFilter])
 
-  const totals = useMemo(() => {
-    const fixed = services.filter((s) => s.pricingType === 'fixed').length
-    const perHour = services.filter((s) => s.pricingType === 'per_hour').length
-    return { total: services.length, fixed, perHour }
-  }, [services])
 
   const handleSubmit = async (values: ServiceFormValues) => {
     const payload = formValuesToServicePayload(values)
@@ -347,26 +338,4 @@ function IconButton({
   )
 }
 
-function SummaryTile({
-  label,
-  value,
-  tone,
-}: {
-  label: string
-  value: number
-  tone: 'neutral' | 'success' | 'warning' | 'danger' | 'muted'
-}) {
-  const toneClass: Record<typeof tone, string> = {
-    neutral: 'text-gray-100',
-    success: 'text-accent-success',
-    warning: 'text-accent-amber',
-    danger: 'text-accent-danger',
-    muted: 'text-gray-400',
-  }
-  return (
-    <div className="rounded-xl border border-surface-border bg-surface-card px-4 py-3">
-      <div className="text-xs uppercase tracking-wide text-gray-500">{label}</div>
-      <div className={`mt-1 text-xl font-semibold ${toneClass[tone]}`}>{value}</div>
-    </div>
-  )
-}
+
