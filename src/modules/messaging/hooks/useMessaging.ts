@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FetchBaseQueryError } from '@reduxjs/toolkit/query'
+import { useSearchField } from '../../../hooks/useSearchField'
 import type { Role } from '../../../types/role'
 import {
   useCustomOfferCreateMutation,
@@ -47,8 +48,16 @@ export function getChatApiErrorMessage(error: unknown, fallback: string) {
 export function useMessaging(role: Role, currentUserId: string) {
   const config = useMemo(() => getRoleMessagingConfig(role), [role])
 
+  const {
+    inputValue,
+    setInputValue,
+    searchTerm,
+    clear: clearSearch,
+    flush,
+    isDebouncing,
+  } = useSearchField({ minChars: 2, syncUrl: false })
+
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [search, setSearch] = useState('')
   const [convPage, setConvPage] = useState(1)
   const [offerModalOpen, setOfferModalOpen] = useState(false)
   const [errorBanner, setErrorBanner] = useState<string | null>(null)
@@ -59,12 +68,20 @@ export function useMessaging(role: Role, currentUserId: string) {
     isLoading: chatsLoading,
     isFetching: chatsFetching,
     isError: chatsError,
-  } = useGetChatsQuery({ page: 1, limit: CHAT_FETCH_LIMIT })
+  } = useGetChatsQuery({
+    page: 1,
+    limit: CHAT_FETCH_LIMIT,
+    ...(searchTerm ? { searchTerm } : {}),
+  })
 
   const conversations = useMemo(
     () => (chatsData?.data ?? []).map((doc) => mapChatFromApi(doc, role)),
     [chatsData?.data, role],
   )
+
+  useEffect(() => {
+    setConvPage(1)
+  }, [searchTerm])
 
   useEffect(() => {
     if (!selectedId && conversations.length > 0) {
@@ -101,28 +118,16 @@ export function useMessaging(role: Role, currentUserId: string) {
     return { messages: thread.messages, offers: thread.offers }
   }, [messagesData?.data, selectedId, currentUserId])
 
-  const filteredConversations = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    if (!q) return conversations
-    return conversations.filter(
-      (c) =>
-        c.title.toLowerCase().includes(q) ||
-        c.counterpartName.toLowerCase().includes(q) ||
-        (c.contextRef?.toLowerCase().includes(q) ?? false) ||
-        c.lastMessagePreview.toLowerCase().includes(q),
-    )
-  }, [conversations, search])
-
   const unreadTotal = useMemo(
-    () => filteredConversations.reduce((s, c) => s + c.unreadCount, 0),
-    [filteredConversations],
+    () => conversations.reduce((s, c) => s + c.unreadCount, 0),
+    [conversations],
   )
 
   const visibleConversations = useMemo(() => {
-    return filteredConversations.slice(0, convPage * CONV_PAGE_SIZE)
-  }, [filteredConversations, convPage])
+    return conversations.slice(0, convPage * CONV_PAGE_SIZE)
+  }, [conversations, convPage])
 
-  const hasMoreConversations = visibleConversations.length < filteredConversations.length
+  const hasMoreConversations = visibleConversations.length < conversations.length
 
   const loadMoreConversations = useCallback(() => {
     setConvPage((p) => p + 1)
@@ -211,12 +216,16 @@ export function useMessaging(role: Role, currentUserId: string) {
   return {
     config,
     conversations: visibleConversations,
-    allConversations: filteredConversations,
+    allConversations: conversations,
     selectedConversation,
     selectedId,
     selectConversation,
-    search,
-    setSearch,
+    inputValue,
+    setInputValue,
+    searchTerm,
+    clearSearch,
+    flush,
+    isDebouncing,
     messages,
     offers,
     sendText,

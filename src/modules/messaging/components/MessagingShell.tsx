@@ -20,8 +20,12 @@ export default function MessagingShell({ role }: Props) {
     selectedConversation,
     selectedId,
     selectConversation,
-    search,
-    setSearch,
+    inputValue,
+    setInputValue,
+    clearSearch,
+    flush,
+    isDebouncing,
+    searchTerm,
     messages,
     offers,
     sendText,
@@ -61,8 +65,11 @@ export default function MessagingShell({ role }: Props) {
         <ConversationListPanel
           title={config.labels.pageTitle}
           unreadTotal={unreadTotal}
-          search={search}
-          onSearchChange={setSearch}
+          value={inputValue}
+          onChange={setInputValue}
+          onClear={clearSearch}
+          onFlush={flush}
+          loading={isDebouncing || (listFetching && Boolean(searchTerm))}
           searchPlaceholder={config.labels.searchPlaceholder}
           conversations={conversations}
           selectedId={selectedId}

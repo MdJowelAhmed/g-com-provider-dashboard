@@ -118,6 +118,7 @@ export interface MessagesListResponse {
 export interface GetChatsParams {
   page?: number
   limit?: number
+  searchTerm?: string
 }
 
 export interface GetChatMessagesParams {

@@ -1,13 +1,17 @@
 import { motion } from 'framer-motion'
-import { Loader2, Search } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
+import SearchField from '../../../components/common/SearchField'
 import type { Conversation } from '../types'
 import { formatMessageTime } from '../utils/formatTime'
 
 type Props = {
   title: string
   unreadTotal: number
-  search: string
-  onSearchChange: (v: string) => void
+  value: string
+  onChange: (v: string) => void
+  onClear: () => void
+  onFlush: () => boolean
+  loading?: boolean
   searchPlaceholder: string
   conversations: Conversation[]
   selectedId: string | null
@@ -27,8 +31,11 @@ function presenceDot(status: Conversation['counterpartStatus']) {
 export default function ConversationListPanel({
   title,
   unreadTotal,
-  search,
-  onSearchChange,
+  value,
+  onChange,
+  onClear,
+  onFlush,
+  loading = false,
   searchPlaceholder,
   conversations,
   selectedId,
@@ -52,17 +59,19 @@ export default function ConversationListPanel({
             </span>
           ) : null}
         </div>
-        <div className="relative mt-3">
-          <Search
-            size={16}
-            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"
-          />
-          <input
-            type="search"
-            value={search}
-            onChange={(e) => onSearchChange(e.target.value)}
+        <div className="mt-3">
+          <SearchField
+            value={value}
+            onChange={onChange}
+            onClear={onClear}
+            onFlush={onFlush}
+            minChars={2}
+            loading={loading}
             placeholder={searchPlaceholder}
-            className="messaging-input h-10 w-full rounded-lg border border-surface-border bg-surface-card pl-9 pr-3 text-sm text-gray-100 placeholder:text-gray-500 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/25"
+            aria-label="Search conversations"
+            widthClass="w-full"
+            inputClassName="messaging-input rounded-lg focus:ring-2 focus:ring-brand/25"
+            className="min-w-0 flex-none"
           />
         </div>
       </div>

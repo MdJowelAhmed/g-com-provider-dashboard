@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Plus, Search, Pencil, Trash2, ImageOff } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Plus, Pencil, Trash2, ImageOff } from 'lucide-react'
 import { Modal, message } from 'antd'
 import type { FetchBaseQueryError } from '@reduxjs/toolkit/query'
 import PageHeader from '../../../components/dashboard/PageHeader'
+import SearchField from '../../../components/common/SearchField'
+import { useSearchField } from '../../../hooks/useSearchField'
 import ProductFormModal, { type ProductSubmitValues } from './ProductFormModal'
 import {
   useCreateProductMutation,
@@ -18,6 +20,7 @@ import {
 } from '../../../redux/api/imageUploadApi'
 import {
   DELIVERY_METHOD_OPTIONS,
+  PRODUCT_CATEGORIES,
   PRODUCT_STATUS_OPTIONS,
   type DeliveryMethod,
   type Product,
@@ -128,36 +131,33 @@ function statusBadge(status: ProductStatus) {
 }
 
 export default function ProductsPage() {
-  const { data, isLoading, isFetching, isError } = useGetProductsQuery({ page: 1, limit: 100 })
+  const { inputValue, setInputValue, searchTerm, clear, flush, isDebouncing } = useSearchField({
+    minChars: 2,
+  })
+  const [typeFilter, setTypeFilter] = useState<string>(allFilter)
+  const [statusFilter, setStatusFilter] = useState<string>(allFilter)
+
+  const { data, isLoading, isFetching, isError } = useGetProductsQuery({
+    page: 1,
+    limit: 100,
+    ...(searchTerm ? { searchTerm } : {}),
+    ...(typeFilter !== allFilter ? { type: typeFilter } : {}),
+    ...(statusFilter !== allFilter ? { status: statusFilter } : {}),
+  })
   const [createProduct, { isLoading: isCreating }] = useCreateProductMutation()
   const [updateProduct, { isLoading: isUpdating }] = useUpdateProductMutation()
   const [deleteProduct] = useDeleteProductMutation()
   const [getPresignedUrl] = useGetPresignedUploadUrlMutation()
   const [products, setProducts] = useState<Product[]>([])
+  const [modal, setModal] = useState<ModalState>({ mode: 'closed' })
+
   useEffect(() => {
-    if (!data?.data) return
+    if (!data?.data) {
+      setProducts([])
+      return
+    }
     setProducts(data.data.map((doc) => mapProductFromApi(doc)))
   }, [data?.data])
-
-  const [modal, setModal] = useState<ModalState>({ mode: 'closed' })
-  const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState<string>(allFilter)
-
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    return products.filter((p) => {
-      if (statusFilter !== allFilter && p.status !== statusFilter) return false
-      if (!q) return true
-      return p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q)
-    })
-  }, [products, search, statusFilter])
-
-  const totals = useMemo(() => {
-    const active = products.filter((p) => p.status === 'active').length
-    const draft = products.filter((p) => p.status === 'draft').length
-    const archived = products.filter((p) => p.status === 'archived').length
-    return { total: products.length, active, draft, archived }
-  }, [products])
 
   const handleSubmit = async (values: ProductSubmitValues) => {
     if (modal.mode === 'closed') return
@@ -204,7 +204,7 @@ export default function ProductsPage() {
       title: 'Delete product?',
       content: (
         <span>
-          Are you sure you want to permanently delete <b>{p.name}</b>? This can't be undone.
+          Are you sure you want to permanently delete <b>{p.name}</b>? This can&apos;t be undone.
         </span>
       ),
       okText: 'Delete',
@@ -239,27 +239,29 @@ export default function ProductsPage() {
         }
       />
 
-      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <SummaryTile label="Total" value={totals.total} tone="neutral" />
-        <SummaryTile label="Active" value={totals.active} tone="success" />
-        <SummaryTile label="Draft" value={totals.draft} tone="muted" />
-        <SummaryTile label="Archived" value={totals.archived} tone="danger" />
-      </div>
-
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <div className="relative flex-1 min-w-[220px]">
-          <Search
-            size={14}
-            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"
-          />
-          <input
-            type="text"
-            placeholder="Search by name or SKU"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="h-10 w-full rounded-md border border-surface-border bg-surface-card pl-9 pr-3 text-sm text-gray-100 placeholder:text-gray-500 focus:border-brand focus:outline-none"
-          />
-        </div>
+        <SearchField
+          value={inputValue}
+          onChange={setInputValue}
+          onClear={clear}
+          onFlush={flush}
+          minChars={2}
+          loading={isDebouncing || ((isLoading || isFetching) && Boolean(searchTerm))}
+          placeholder="Search by name or SKU"
+          aria-label="Search products"
+        />
+        <select
+          value={typeFilter}
+          onChange={(e) => setTypeFilter(e.target.value)}
+          className="h-10 rounded-md border border-surface-border bg-surface-card px-3 text-sm text-gray-100 focus:border-brand focus:outline-none"
+        >
+          <option value={allFilter}>All types</option>
+          {PRODUCT_CATEGORIES.map((category) => (
+            <option key={category} value={category}>
+              {category}
+            </option>
+          ))}
+        </select>
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
@@ -298,14 +300,14 @@ export default function ProductsPage() {
                     Loading products…
                   </td>
                 </tr>
-              ) : filtered.length === 0 ? (
+              ) : products.length === 0 ? (
                 <tr>
                   <td colSpan={10} className="px-4 py-10 text-center text-gray-500">
                     No products match your filters.
                   </td>
                 </tr>
               ) : (
-                filtered.map((p) => (
+                products.map((p) => (
                   <tr
                     key={p.id}
                     className="border-b border-surface-border last:border-b-0 hover:bg-surface-elevated"
@@ -329,7 +331,9 @@ export default function ProductsPage() {
                       {formatPrice(p.deliveryFee)}
                     </td>
                     <td className="px-4 py-3 text-right text-gray-300">
-                      {p.deliveryTime ? `${p.deliveryTime} day${p.deliveryTime === '1' ? '' : 's'}` : '—'}
+                      {p.deliveryTime
+                        ? `${p.deliveryTime} day${p.deliveryTime === '1' ? '' : 's'}`
+                        : '—'}
                     </td>
                     <td className="px-4 py-3">{statusBadge(p.status)}</td>
                     <td className="px-4 py-3 text-xs text-gray-400">{formatDateTime(p.createdAt)}</td>
@@ -356,7 +360,7 @@ export default function ProductsPage() {
 
       {isError ? (
         <div className="mt-4 rounded-md border border-accent-danger/30 bg-accent-danger/10 px-4 py-3 text-sm text-accent-danger">
-          Failed to load products from API. Showing the current list.
+          Failed to load products from API.
         </div>
       ) : null}
 
@@ -386,8 +390,7 @@ function ProductThumb({ src, alt }: { src: string; alt: string }) {
       alt={alt}
       className="h-12 w-12 shrink-0 rounded-md border border-surface-border bg-surface-elevated object-cover"
       onError={(e) => {
-        const el = e.currentTarget
-        el.style.display = 'none'
+        e.currentTarget.style.display = 'none'
       }}
     />
   )
@@ -415,29 +418,5 @@ function IconButton({
     >
       {children}
     </button>
-  )
-}
-
-function SummaryTile({
-  label,
-  value,
-  tone,
-}: {
-  label: string
-  value: number
-  tone: 'neutral' | 'success' | 'warning' | 'danger' | 'muted'
-}) {
-  const toneClass: Record<typeof tone, string> = {
-    neutral: 'text-gray-100',
-    success: 'text-accent-success',
-    warning: 'text-accent-amber',
-    danger: 'text-accent-danger',
-    muted: 'text-gray-400',
-  }
-  return (
-    <div className="rounded-xl border border-surface-border bg-surface-card px-4 py-3">
-      <div className="text-xs uppercase tracking-wide text-gray-500">{label}</div>
-      <div className={`mt-1 text-xl font-semibold ${toneClass[tone]}`}>{value}</div>
-    </div>
   )
 }
