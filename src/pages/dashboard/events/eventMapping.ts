@@ -49,6 +49,7 @@ export function eventToFormValues(event: Event): EventFormValues {
     startTime: event.startTime,
     endTime: event.endTime,
     registrationDeadline: event.registrationDeadline,
+    locationName: '',
     latitude: lat ?? null,
     longitude: lng ?? null,
     maxCapacity: event.maxCapacity,

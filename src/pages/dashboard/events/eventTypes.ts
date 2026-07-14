@@ -9,6 +9,7 @@ export type EventFormValues = {
   startTime: string
   endTime: string
   registrationDeadline: string
+  locationName: string
   latitude: number | null
   longitude: number | null
   maxCapacity: number

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Drawer,
   Form,
@@ -13,6 +13,10 @@ import {
   message,
 } from 'antd'
 import ImageUploader from '../../../components/common/ImageUploader'
+import GoogleMapLocationPicker, {
+  type GoogleMapLocationPickerRef,
+} from '../../../components/common/GoogleMapLocationPicker'
+import { parseCoordinate } from '../../../lib/googleMaps'
 import { useGetBusinessCategoriesQuery } from '../../../redux/api/businessCategoryApi'
 import { useGetShopsQuery } from '../../../redux/api/shopManagementApi'
 import { useGetSubCategoriesQuery } from '../../../redux/api/serviceApi'
@@ -38,6 +42,7 @@ const blankValues: EventFormValues = {
   startTime: '',
   endTime: '',
   registrationDeadline: '',
+  locationName: '',
   latitude: null,
   longitude: null,
   maxCapacity: 100,
@@ -66,6 +71,17 @@ function fromDatetimeLocal(local: string): string {
   return d.toISOString()
 }
 
+function nowDatetimeLocal(): string {
+  return toDatetimeLocal(new Date().toISOString())
+}
+
+function isPastDatetimeLocal(value: string) {
+  if (!value) return false
+  const selected = new Date(value)
+  if (Number.isNaN(selected.getTime())) return false
+  return selected.getTime() < Date.now()
+}
+
 export default function EventFormDrawer({
   open,
   mode,
@@ -75,9 +91,35 @@ export default function EventFormDrawer({
   onSubmit,
 }: Props) {
   const [form] = Form.useForm<EventFormValues>()
+  const locationPickerRef = useRef<GoogleMapLocationPickerRef>(null)
   const [pendingImageFile, setPendingImageFile] = useState<File | null>(null)
   const [isUploadingImage, setIsUploadingImage] = useState(false)
   const [getPresignedUrl] = useGetPresignedUploadUrlMutation()
+  const minDatetime = useMemo(() => nowDatetimeLocal(), [open])
+
+  const startMin = useMemo(() => {
+    if (mode === 'edit' && initial?.startTime) {
+      const existing = toDatetimeLocal(initial.startTime)
+      if (existing && isPastDatetimeLocal(existing)) return existing
+    }
+    return minDatetime
+  }, [mode, initial?.startTime, minDatetime])
+
+  const endMin = useMemo(() => {
+    if (mode === 'edit' && initial?.endTime) {
+      const existing = toDatetimeLocal(initial.endTime)
+      if (existing && isPastDatetimeLocal(existing)) return existing
+    }
+    return minDatetime
+  }, [mode, initial?.endTime, minDatetime])
+
+  const registrationMin = useMemo(() => {
+    if (mode === 'edit' && initial?.registrationDeadline) {
+      const existing = toDatetimeLocal(initial.registrationDeadline)
+      if (existing && isPastDatetimeLocal(existing)) return existing
+    }
+    return minDatetime
+  }, [mode, initial?.registrationDeadline, minDatetime])
 
   const { data: shopsData, isLoading: shopsLoading } = useGetShopsQuery(
     { page: 1, limit: 100 },
@@ -121,6 +163,16 @@ export default function EventFormDrawer({
     [subCategoriesData?.data],
   )
 
+  const locationName = Form.useWatch('locationName', form)
+  const latitude = Form.useWatch('latitude', form)
+  const longitude = Form.useWatch('longitude', form)
+  const locationNameError = form.getFieldError('locationName')[0]
+  const latitudeError = form.getFieldError('latitude')[0]
+  const locationHelp =
+    locationNameError ||
+    latitudeError ||
+    'Search a place, pick a suggestion, or click the map — lat/lng fill automatically.'
+
   useEffect(() => {
     if (!open) return
     setPendingImageFile(null)
@@ -137,8 +189,39 @@ export default function EventFormDrawer({
     }
   }, [open, mode, initial, form])
 
+  const notPastRule = (label: string, initialIso?: string) => ({
+    validator: async (_: unknown, value: string) => {
+      if (!value) return
+      if (!isPastDatetimeLocal(value)) return
+      // Keep an already-saved past value valid in edit mode; block choosing a new past date.
+      if (mode === 'edit' && initialIso && toDatetimeLocal(initialIso) === value) return
+      throw new Error(`${label} cannot be in the past`)
+    },
+  })
+
   const handleOk = async () => {
     try {
+      const lat = parseCoordinate(form.getFieldValue('latitude'))
+      const lng = parseCoordinate(form.getFieldValue('longitude'))
+
+      if (lat == null || lng == null) {
+        const resolved = await locationPickerRef.current?.resolveLocation()
+        if (!resolved) {
+          message.error(
+            'Please search a location, select a suggestion, press Enter, or click on the map.',
+          )
+          return
+        }
+        form.setFieldsValue({
+          locationName: resolved.locationName,
+          latitude: resolved.latitude,
+          longitude: resolved.longitude,
+        })
+      } else {
+        const typedName = locationPickerRef.current?.getInputValue()
+        if (typedName) form.setFieldValue('locationName', typedName)
+      }
+
       const values = await form.validateFields()
       let imageUrl = values.image?.trim() ?? ''
 
@@ -186,6 +269,7 @@ export default function EventFormDrawer({
       width={780}
       placement="right"
       destroyOnHidden
+      styles={{ body: { overflow: 'visible' } }}
       footer={
         <Space style={{ display: 'flex', justifyContent: 'flex-end', width: '100%' }}>
           <Button onClick={onCancel} disabled={busy}>
@@ -261,27 +345,45 @@ export default function EventFormDrawer({
             <Form.Item
               name="startTime"
               label="Start time"
-              rules={[{ required: true, message: 'Start time is required' }]}
+              rules={[
+                { required: true, message: 'Start time is required' },
+                notPastRule('Start time', initial?.startTime),
+              ]}
             >
-              <Input type="datetime-local" />
+              <Input type="datetime-local" min={startMin} />
             </Form.Item>
           </Col>
           <Col span={12}>
             <Form.Item
               name="endTime"
               label="End time"
-              rules={[{ required: true, message: 'End time is required' }]}
+              rules={[
+                { required: true, message: 'End time is required' },
+                notPastRule('End time', initial?.endTime),
+                {
+                  validator: async (_, value: string) => {
+                    const start = form.getFieldValue('startTime') as string
+                    if (!value || !start) return
+                    if (new Date(value).getTime() <= new Date(start).getTime()) {
+                      throw new Error('End time must be after start time')
+                    }
+                  },
+                },
+              ]}
             >
-              <Input type="datetime-local" />
+              <Input type="datetime-local" min={endMin} />
             </Form.Item>
           </Col>
           <Col span={12}>
             <Form.Item
               name="registrationDeadline"
               label="Registration deadline"
-              rules={[{ required: true, message: 'Registration deadline is required' }]}
+              rules={[
+                { required: true, message: 'Registration deadline is required' },
+                notPastRule('Registration deadline', initial?.registrationDeadline),
+              ]}
             >
-              <Input type="datetime-local" />
+              <Input type="datetime-local" min={registrationMin} />
             </Form.Item>
           </Col>
         </Row>
@@ -290,22 +392,54 @@ export default function EventFormDrawer({
           Location
         </Divider>
         <Row gutter={16}>
-          <Col span={12}>
+          <Col span={24}>
             <Form.Item
-              name="longitude"
-              label="Longitude"
-              rules={[{ required: true, message: 'Longitude is required' }]}
+              name="locationName"
+              hidden
+              rules={[
+                {
+                  validator: async () => {
+                    const lat = parseCoordinate(form.getFieldValue('latitude'))
+                    const lng = parseCoordinate(form.getFieldValue('longitude'))
+                    if (lat != null && lng != null) return
+                    throw new Error('Location is required')
+                  },
+                },
+              ]}
             >
-              <InputNumber step={0.000001} style={{ width: '100%' }} placeholder="90.398911" />
+              <Input />
             </Form.Item>
-          </Col>
-          <Col span={12}>
+            <Form.Item name="latitude" hidden rules={[{ required: true, message: 'Latitude is required' }]}>
+              <InputNumber />
+            </Form.Item>
+            <Form.Item name="longitude" hidden rules={[{ required: true, message: 'Longitude is required' }]}>
+              <InputNumber />
+            </Form.Item>
             <Form.Item
-              name="latitude"
-              label="Latitude"
-              rules={[{ required: true, message: 'Latitude is required' }]}
+              label="Event location"
+              required
+              validateStatus={locationNameError || latitudeError ? 'error' : locationName ? 'success' : undefined}
+              help={locationHelp}
             >
-              <InputNumber step={0.000001} style={{ width: '100%' }} placeholder="23.779343" />
+              <GoogleMapLocationPicker
+                ref={locationPickerRef}
+                value={{
+                  locationName: locationName ?? '',
+                  latitude: parseCoordinate(latitude),
+                  longitude: parseCoordinate(longitude),
+                }}
+                onNameChange={(name) => {
+                  form.setFieldValue('locationName', name)
+                }}
+                onChange={(next) => {
+                  form.setFieldsValue({
+                    locationName: next.locationName,
+                    latitude: next.latitude,
+                    longitude: next.longitude,
+                  })
+                  void form.validateFields(['locationName', 'latitude', 'longitude'])
+                }}
+              />
             </Form.Item>
           </Col>
         </Row>
