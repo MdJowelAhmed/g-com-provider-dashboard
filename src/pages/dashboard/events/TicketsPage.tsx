@@ -1,12 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import {
-  Search,
-  Eye,
-  ImageOff,
-  Hash,
-  Ticket as TicketIcon
-} from 'lucide-react'
+import { Eye, ImageOff, Hash, Ticket as TicketIcon } from 'lucide-react'
 import PageHeader from '../../../components/dashboard/PageHeader'
+import SearchField from '../../../components/common/SearchField'
+import { useSearchField } from '../../../hooks/useSearchField'
 import TicketDrawer from './TicketDrawer'
 import { useGetProviderOrdersQuery, type ProviderOrderApiDoc } from '../../../redux/api/myBookingApi'
 import {
@@ -113,16 +109,19 @@ function mapOrderToTicket(order: ProviderOrderApiDoc): Ticket | null {
 }
 
 export default function TicketsPage() {
+  const { inputValue, setInputValue, searchTerm, clear, flush, isDebouncing } = useSearchField({
+    minChars: 2,
+  })
+  const [paymentFilter, setPaymentFilter] = useState<string>(allFilter)
+
   const { data, isLoading, isFetching, isError } = useGetProviderOrdersQuery({
     page: 1,
     limit: 100,
+    ...(searchTerm ? { searchTerm } : {}),
+    ...(paymentFilter !== allFilter ? { paymentStatus: paymentFilter } : {}),
   })
+
   const [tickets, setTickets] = useState<Ticket[]>([])
-  const [search, setSearch] = useState('')
-  const [eventFilter, setEventFilter] = useState<string>(allFilter)
-  const [statusFilter, setStatusFilter] = useState<string>(allFilter)
-  const [paymentFilter, setPaymentFilter] = useState<string>(allFilter)
-  const [checkinFilter, setCheckinFilter] = useState<string>(allFilter)
   const [openId, setOpenId] = useState<string | null>(null)
 
   useEffect(() => {
@@ -133,54 +132,13 @@ export default function TicketsPage() {
     setTickets(mapped)
   }, [data?.data])
 
-  const events = useMemo(() => {
-    const seen = new Map<string, { id: string; name: string }>()
-    for (const t of tickets) {
-      if (!seen.has(t.event.id)) {
-        seen.set(t.event.id, { id: t.event.id, name: t.event.name })
-      }
-    }
-    return Array.from(seen.values()).sort((a, b) => a.name.localeCompare(b.name))
-  }, [tickets])
-
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    return tickets
-      .filter((t) => {
-        if (eventFilter !== allFilter && t.event.id !== eventFilter) return false
-        if (statusFilter !== allFilter && t.status !== statusFilter) return false
-        if (paymentFilter !== allFilter && t.paymentStatus !== paymentFilter) return false
-        if (checkinFilter === 'in' && !t.checkedIn) return false
-        if (checkinFilter === 'out' && t.checkedIn) return false
-        if (!q) return true
-        return (
-          t.code.toLowerCase().includes(q) ||
-          t.buyer.name.toLowerCase().includes(q) ||
-          t.buyer.phone.toLowerCase().includes(q) ||
-          t.buyer.email.toLowerCase().includes(q) ||
-          t.event.name.toLowerCase().includes(q) ||
-          t.tier.toLowerCase().includes(q)
-        )
-      })
-      .sort(
+  const sortedTickets = useMemo(
+    () =>
+      [...tickets].sort(
         (a, b) => new Date(b.issuedAt).getTime() - new Date(a.issuedAt).getTime(),
-      )
-  }, [tickets, search, eventFilter, statusFilter, paymentFilter, checkinFilter])
-
-  const totals = useMemo(() => {
-    const confirmed = tickets.filter((t) => t.status === 'confirmed')
-    const paid = confirmed.filter((t) => t.paymentStatus === 'paid')
-    const checkedIn = tickets.filter((t) => t.checkedIn).length
-    const revenue = paid.reduce((sum, t) => sum + t.total, 0)
-    const unitsSold = confirmed.reduce((sum, t) => sum + t.quantity, 0)
-    return {
-      total: tickets.length,
-      confirmed: confirmed.length,
-      unitsSold,
-      checkedIn,
-      revenue,
-    }
-  }, [tickets])
+      ),
+    [tickets],
+  )
 
   const selected = openId ? tickets.find((t) => t.id === openId) ?? null : null
 
@@ -199,46 +157,18 @@ export default function TicketsPage() {
         description="All tickets sold across your events — manage status, payments, and check-ins."
       />
 
-      {/* <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
-        <SummaryTile label="Total tickets" value={totals.total} tone="neutral" />
-        <SummaryTile label="Confirmed" value={totals.confirmed} tone="success" />
-        <SummaryTile label="Units sold" value={totals.unitsSold} tone="brand" />
-        <SummaryTile label="Checked in" value={totals.checkedIn} tone="info" />
-        <SummaryTile
-          label="Revenue"
-          value={`$${totals.revenue.toFixed(0)}`}
-          tone="success"
-          compact
-        />
-      </div> */}
-
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <div className="relative flex-1 min-w-[240px]">
-          <Search
-            size={14}
-            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"
-          />
-          <input
-            type="text"
-            placeholder="Search by code, buyer, or event"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="h-10 w-[300px] rounded-md border border-surface-border bg-surface-card pl-9 pr-3 text-sm text-gray-100 placeholder:text-gray-500 focus:border-brand focus:outline-none"
-          />
-        </div>
+        <SearchField
+          value={inputValue}
+          onChange={setInputValue}
+          onClear={clear}
+          onFlush={flush}
+          minChars={2}
+          loading={isDebouncing || ((isLoading || isFetching) && Boolean(searchTerm))}
+          placeholder="Search by code, buyer, or event"
+          aria-label="Search tickets"
+        />
 
-        {/* <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="h-10 rounded-md border border-surface-border bg-surface-card px-3 text-sm text-gray-100 focus:border-brand focus:outline-none"
-        >
-          <option value={allFilter}>All statuses</option>
-          {TICKET_STATUS_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select> */}
         <select
           value={paymentFilter}
           onChange={(e) => setPaymentFilter(e.target.value)}
@@ -251,7 +181,6 @@ export default function TicketsPage() {
             </option>
           ))}
         </select>
-       
       </div>
 
       <div className="overflow-hidden rounded-xl border border-surface-border bg-surface-card">
@@ -277,14 +206,14 @@ export default function TicketsPage() {
                     Loading tickets...
                   </td>
                 </tr>
-              ) : filtered.length === 0 ? (
+              ) : sortedTickets.length === 0 ? (
                 <tr>
                   <td colSpan={9} className="px-4 py-10 text-center text-gray-500">
                     No tickets match your filters.
                   </td>
                 </tr>
               ) : (
-                filtered.map((t) => (
+                sortedTickets.map((t) => (
                   <tr
                     key={t.id}
                     className="cursor-pointer border-b border-surface-border last:border-b-0 hover:bg-surface-elevated"
@@ -332,9 +261,7 @@ export default function TicketsPage() {
                       {t.total === 0 ? (
                         <span className="font-medium text-accent-success">Free</span>
                       ) : (
-                        <div className="font-semibold text-gray-100">
-                          ${t.total.toFixed(2)}
-                        </div>
+                        <div className="font-semibold text-gray-100">${t.total.toFixed(2)}</div>
                       )}
                     </td>
                     <td className="px-4 py-3">
@@ -399,40 +326,6 @@ function EventThumb({ alt }: { alt: string }) {
     <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-surface-border bg-surface-elevated text-gray-500">
       <ImageOff size={14} />
       <span className="sr-only">{alt}</span>
-    </div>
-  )
-}
-
-function SummaryTile({
-  label,
-  value,
-  tone,
-  compact,
-}: {
-  label: string
-  value: number | string
-  tone: 'neutral' | 'success' | 'warning' | 'danger' | 'muted' | 'info' | 'brand'
-  compact?: boolean
-}) {
-  const toneClass: Record<typeof tone, string> = {
-    neutral: 'text-gray-100',
-    success: 'text-accent-success',
-    warning: 'text-accent-amber',
-    danger: 'text-accent-danger',
-    muted: 'text-gray-400',
-    info: 'text-blue-400',
-    brand: 'text-brand-cream',
-  }
-  return (
-    <div className="rounded-xl border border-surface-border bg-surface-card px-4 py-3">
-      <div className="text-xs uppercase tracking-wide text-gray-500">{label}</div>
-      <div
-        className={`mt-1 font-semibold ${toneClass[tone]} ${
-          compact ? 'text-lg' : 'text-xl'
-        }`}
-      >
-        {value}
-      </div>
     </div>
   )
 }
