@@ -67,6 +67,7 @@ export default function EventsPage() {
     page: 1,
     limit: 100,
     ...(searchTerm ? { searchTerm } : {}),
+    ...(statusFilter !== allFilter ? { status: statusFilter } : {}),
   })
   const [createEvent, { isLoading: isCreating }] = useCreateEventMutation()
   const [updateEvent, { isLoading: isUpdating }] = useUpdateEventMutation()
@@ -74,17 +75,7 @@ export default function EventsPage() {
 
   const events = useMemo(() => (data?.data ?? []).map((doc) => mapEventFromApi(doc)), [data?.data])
 
-  const filtered = useMemo(() => {
-    if (statusFilter === allFilter) return events
-    return events.filter((event) => event.status === statusFilter)
-  }, [events, statusFilter])
 
-  const totals = useMemo(() => {
-    const active = events.filter((event) => event.status === 'active').length
-    const booked = events.reduce((sum, event) => sum + event.bookedCapacity, 0)
-    const capacity = events.reduce((sum, event) => sum + event.maxCapacity, 0)
-    return { total: events.length, active, booked, capacity }
-  }, [events])
 
   const handleSubmit = async (values: EventFormValues) => {
     const payload = formValuesToEventPayload(values)
@@ -147,12 +138,7 @@ export default function EventsPage() {
         }
       />
 
-      {/* <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <SummaryTile label="Total" value={totals.total} tone="neutral" />
-        <SummaryTile label="Active" value={totals.active} tone="success" />
-        <SummaryTile label="Booked" value={totals.booked} tone="info" />
-        <SummaryTile label="Capacity" value={totals.capacity} tone="brand" />
-      </div> */}
+     
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <SearchField
@@ -209,14 +195,14 @@ export default function EventsPage() {
                     Loading events…
                   </td>
                 </tr>
-              ) : filtered.length === 0 ? (
+              ) : events?.length === 0 ? (
                 <tr>
                   <td colSpan={10} className="px-4 py-10 text-center text-gray-500">
                     No events match your filters.
                   </td>
                 </tr>
               ) : (
-                filtered.map((event) => (
+                events?.map((event) => (
                   <tr
                     key={event.id}
                     className="border-b border-surface-border last:border-b-0 hover:bg-surface-elevated"
@@ -337,28 +323,4 @@ function IconButton({
   )
 }
 
-function SummaryTile({
-  label,
-  value,
-  tone,
-}: {
-  label: string
-  value: number | string
-  tone: 'neutral' | 'success' | 'warning' | 'danger' | 'muted' | 'info' | 'brand'
-}) {
-  const toneClass: Record<typeof tone, string> = {
-    neutral: 'text-gray-100',
-    success: 'text-accent-success',
-    warning: 'text-accent-amber',
-    danger: 'text-accent-danger',
-    muted: 'text-gray-400',
-    info: 'text-blue-400',
-    brand: 'text-brand-cream',
-  }
-  return (
-    <div className="rounded-xl border border-surface-border bg-surface-card px-4 py-3">
-      <div className="text-xs uppercase tracking-wide text-gray-500">{label}</div>
-      <div className={`mt-1 text-xl font-semibold ${toneClass[tone]}`}>{value}</div>
-    </div>
-  )
-}
+
