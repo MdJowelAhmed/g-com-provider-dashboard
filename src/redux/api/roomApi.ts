@@ -55,6 +55,9 @@ export interface RoomsListResponse {
 export interface GetRoomsParams {
   page?: number
   limit?: number
+  searchTerm?: string
+  type?: string
+  status?: string
 }
 
 export interface RoomPayload {

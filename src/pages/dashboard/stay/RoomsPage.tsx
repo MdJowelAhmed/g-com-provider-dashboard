@@ -1,16 +1,10 @@
 import { useMemo, useState } from 'react'
-import {
-  Plus,
-  Search,
-  Pencil,
-  Trash2,
-  ImageOff,
-  Bed,
-  Users,
-} from 'lucide-react'
+import { Plus, Pencil, Trash2, ImageOff, Bed, Users } from 'lucide-react'
 import { Modal, message } from 'antd'
 import type { FetchBaseQueryError } from '@reduxjs/toolkit/query'
 import PageHeader from '../../../components/dashboard/PageHeader'
+import SearchField from '../../../components/common/SearchField'
+import { useSearchField } from '../../../hooks/useSearchField'
 import RoomFormDrawer from './RoomFormDrawer'
 import { ROOM_TYPE_OPTIONS, type Room, type RoomFormValues } from './roomTypes'
 import { formValuesToRoomPayload, mapRoomFromApi } from './roomMapping'
@@ -20,7 +14,6 @@ import {
   useGetRoomsQuery,
   useUpdateRoomMutation,
 } from '../../../redux/api/roomApi'
-import { useGetBusinessCategoriesQuery } from '../../../redux/api/businessCategoryApi'
 import { useGetShopsQuery } from '../../../redux/api/shopManagementApi'
 
 type ModalState = { mode: 'closed' } | { mode: 'add' } | { mode: 'edit'; room: Room }
@@ -49,13 +42,20 @@ function formatPrice(n: number | null | undefined) {
 
 export default function RoomsPage() {
   const [modal, setModal] = useState<ModalState>({ mode: 'closed' })
-  const [search, setSearch] = useState('')
+  const { inputValue, setInputValue, searchTerm, clear, flush, isDebouncing } = useSearchField({
+    minChars: 2,
+  })
   const [typeFilter, setTypeFilter] = useState<string>(allFilter)
   const [statusFilter, setStatusFilter] = useState<string>(allFilter)
 
-  const { data, isLoading, isFetching, isError } = useGetRoomsQuery({ page: 1, limit: 100 })
+  const { data, isLoading, isFetching, isError } = useGetRoomsQuery({
+    page: 1,
+    limit: 100,
+    ...(searchTerm ? { searchTerm } : {}),
+    ...(typeFilter !== allFilter ? { type: typeFilter } : {}),
+    ...(statusFilter !== allFilter ? { status: statusFilter } : {}),
+  })
   const { data: shopsData } = useGetShopsQuery({ page: 1, limit: 100 })
-  const { data: categoriesData } = useGetBusinessCategoriesQuery()
 
   const [createRoom, { isLoading: isCreating }] = useCreateRoomMutation()
   const [updateRoom, { isLoading: isUpdating }] = useUpdateRoomMutation()
@@ -69,44 +69,10 @@ export default function RoomsPage() {
     return map
   }, [shopsData?.data])
 
-  const businessCategoryNameById = useMemo(() => {
-    const map = new Map<string, string>()
-    for (const category of categoriesData?.data ?? []) {
-      map.set(category._id, category.name)
-    }
-    return map
-  }, [categoriesData?.data])
-
   const rooms = useMemo(
     () => (data?.data ?? []).map((doc) => mapRoomFromApi(doc)),
     [data?.data],
   )
-
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    return rooms.filter((r) => {
-      if (typeFilter !== allFilter && r.roomType !== typeFilter) return false
-      if (statusFilter !== allFilter && r.status !== statusFilter) return false
-      if (!q) return true
-      const branchName = branchNameById.get(r.branchId) ?? ''
-      const categoryName = businessCategoryNameById.get(r.businessCategoryId) ?? ''
-      return (
-        r.roomNumber.toLowerCase().includes(q) ||
-        r.name.toLowerCase().includes(q) ||
-        r.roomCode.toLowerCase().includes(q) ||
-        r.roomType.toLowerCase().includes(q) ||
-        branchName.toLowerCase().includes(q) ||
-        categoryName.toLowerCase().includes(q)
-      )
-    })
-  }, [rooms, search, typeFilter, statusFilter, branchNameById, businessCategoryNameById])
-
-  const totals = useMemo(() => {
-    const active = rooms.filter((r) => r.status === 'active').length
-    const avgRate =
-      rooms.length > 0 ? rooms.reduce((sum, r) => sum + r.basePrice, 0) / rooms.length : 0
-    return { total: rooms.length, active, avgRate }
-  }, [rooms])
 
   const handleSubmit = async (values: RoomFormValues) => {
     const payload = formValuesToRoomPayload(values)
@@ -169,31 +135,17 @@ export default function RoomsPage() {
         }
       />
 
-      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <SummaryTile label="Total" value={totals.total} tone="neutral" />
-        <SummaryTile label="Active" value={totals.active} tone="success" />
-        <SummaryTile
-          label="Avg. rate"
-          value={`$${totals.avgRate.toFixed(0)}`}
-          tone="brand"
-          compact
-        />
-      </div>
-
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <div className="relative min-w-[240px] flex-1">
-          <Search
-            size={14}
-            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"
-          />
-          <input
-            type="text"
-            placeholder="Search by room #, name, code, or type"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="h-10 w-full rounded-md border border-surface-border bg-surface-card pl-9 pr-3 text-sm text-gray-100 placeholder:text-gray-500 focus:border-brand focus:outline-none"
-          />
-        </div>
+        <SearchField
+          value={inputValue}
+          onChange={setInputValue}
+          onClear={clear}
+          onFlush={flush}
+          minChars={2}
+          loading={isDebouncing || ((isLoading || isFetching) && Boolean(searchTerm))}
+          placeholder="Search by room #, name, code, or type"
+          aria-label="Search rooms"
+        />
         <select
           value={typeFilter}
           onChange={(e) => setTypeFilter(e.target.value)}
@@ -247,14 +199,14 @@ export default function RoomsPage() {
                     Loading rooms…
                   </td>
                 </tr>
-              ) : filtered.length === 0 ? (
+              ) : rooms.length === 0 ? (
                 <tr>
                   <td colSpan={10} className="px-4 py-10 text-center text-gray-500">
                     No rooms match your filters.
                   </td>
                 </tr>
               ) : (
-                filtered.map((r) => (
+                rooms.map((r) => (
                   <tr
                     key={r.id}
                     className="border-b border-surface-border last:border-b-0 hover:bg-surface-elevated"
@@ -395,39 +347,5 @@ function IconButton({
     >
       {children}
     </button>
-  )
-}
-
-function SummaryTile({
-  label,
-  value,
-  tone,
-  compact,
-}: {
-  label: string
-  value: number | string
-  tone: 'neutral' | 'success' | 'warning' | 'danger' | 'muted' | 'info' | 'brand'
-  compact?: boolean
-}) {
-  const toneClass: Record<typeof tone, string> = {
-    neutral: 'text-gray-100',
-    success: 'text-accent-success',
-    warning: 'text-accent-amber',
-    danger: 'text-accent-danger',
-    muted: 'text-gray-400',
-    info: 'text-blue-400',
-    brand: 'text-brand-cream',
-  }
-  return (
-    <div className="rounded-xl border border-surface-border bg-surface-card px-4 py-3">
-      <div className="text-xs uppercase tracking-wide text-gray-500">{label}</div>
-      <div
-        className={`mt-1 font-semibold ${toneClass[tone]} ${
-          compact ? 'text-lg' : 'text-xl'
-        }`}
-      >
-        {value}
-      </div>
-    </div>
   )
 }
