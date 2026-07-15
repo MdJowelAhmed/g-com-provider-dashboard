@@ -151,7 +151,7 @@ export default function OfferModal({
             >
               {items.map((item) => (
                 <option key={item.id} value={item.id}>
-                  {item.name} — ${item.price.toFixed(2)}
+                  {item.name} — GH₵ {item.price.toFixed(2)}
                   {item.subtitle ? ` (${item.subtitle})` : ''}
                 </option>
               ))}
@@ -308,17 +308,17 @@ export default function OfferModal({
         <div className="rounded-xl border border-surface-border bg-surface-elevated p-4">
           <div className="flex justify-between text-xs text-gray-500">
             <span>Subtotal</span>
-            <span className="font-mono text-gray-300">USD {subtotal.toFixed(2)}</span>
+            <span className="font-mono text-gray-300">GH₵ {subtotal.toFixed(2)}</span>
           </div>
           {showDeliveryFee ? (
             <div className="mt-2 flex justify-between text-xs text-gray-500">
               <span>Delivery fee</span>
-              <span className="font-mono text-gray-300">USD {deliveryFee.toFixed(2)}</span>
+              <span className="font-mono text-gray-300">GH₵ {deliveryFee.toFixed(2)}</span>
             </div>
           ) : null}
           <div className="mt-3 flex justify-between border-t border-surface-border pt-3 text-sm font-semibold text-white">
             <span>Customer pays</span>
-            <span className="font-mono">USD {total.toFixed(2)}</span>
+            <span className="font-mono">GH₵ {total.toFixed(2)}</span>
           </div>
           {selectedItem ? (
             <p className="mt-2 text-[11px] text-gray-500">

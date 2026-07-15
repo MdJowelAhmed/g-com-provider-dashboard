@@ -286,7 +286,7 @@ export default function RoomFormDrawer({
           <Col span={8}>
             <Form.Item
               name="basePrice"
-              label="Base price ($)"
+              label="Base price (GH₵)"
               rules={[{ required: true, message: 'Base price is required' }]}
             >
               <InputNumber min={0} step={0.01} style={{ width: '100%' }} />

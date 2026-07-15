@@ -55,7 +55,7 @@ export function seedMockMessagingState(role: Role, businessLabel: string): MockM
           { id: 'l2', label: 'Add-on', unitPrice: 12, quantity: 2 },
         ],
         deliveryMethod: 'delivery',
-        currency: 'USD',
+        currency: 'GH₵',
         subtotal: 72,
         fees: 4,
         total: 76,

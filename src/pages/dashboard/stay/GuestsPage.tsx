@@ -119,7 +119,7 @@ export default function GuestsPage() {
         />
         <SummaryTile
           label="Lifetime revenue"
-          value={`$${totals.totalRevenue.toFixed(0)}`}
+          value={`GH₵ ${totals.totalRevenue.toFixed(0)}`}
           tone="brand"
           compact
         />
@@ -243,7 +243,7 @@ export default function GuestsPage() {
                       </td>
                       <td className="px-4 py-3 text-right">
                         <div className="font-semibold text-gray-100">
-                          ${g.totalSpent.toFixed(0)}
+                          GH₵ {g.totalSpent.toFixed(0)}
                         </div>
                         {g.preferredRoomType ? (
                           <div className="flex items-center justify-end gap-1 text-[11px] text-gray-500">

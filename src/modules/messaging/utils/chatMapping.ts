@@ -186,7 +186,7 @@ function mapCustomOfferFromMessage(
       },
     ],
     deliveryMethod: 'delivery',
-    currency: 'USD',
+    currency: 'GH₵',
     subtotal,
     fees,
     total: embedded?.totalAmount ?? subtotal + fees,

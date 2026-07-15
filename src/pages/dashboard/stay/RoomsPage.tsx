@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react'
-import { Plus, Pencil, Trash2, ImageOff, Bed, Users } from 'lucide-react'
+import { Plus, Pencil, Trash2, ImageOff, Bed, Users, Eye } from 'lucide-react'
 import { Modal, message } from 'antd'
 import type { FetchBaseQueryError } from '@reduxjs/toolkit/query'
 import PageHeader from '../../../components/dashboard/PageHeader'
 import SearchField from '../../../components/common/SearchField'
 import { useSearchField } from '../../../hooks/useSearchField'
 import RoomFormDrawer from './RoomFormDrawer'
+import RoomDetailsDrawer from './RoomDetailsDrawer'
 import { ROOM_TYPE_OPTIONS, type Room, type RoomFormValues } from './roomTypes'
 import { formValuesToRoomPayload, mapRoomFromApi } from './roomMapping'
 import {
@@ -37,11 +38,12 @@ function getApiErrorMessage(error: unknown, fallback: string) {
 
 function formatPrice(n: number | null | undefined) {
   if (n === null || n === undefined) return '—'
-  return `$${n.toFixed(0)}`
+  return `GH₵ ${n.toFixed(0)}`
 }
 
 export default function RoomsPage() {
   const [modal, setModal] = useState<ModalState>({ mode: 'closed' })
+  const [detailsId, setDetailsId] = useState<string | null>(null)
   const { inputValue, setInputValue, searchTerm, clear, flush, isDebouncing } = useSearchField({
     minChars: 2,
   })
@@ -73,6 +75,14 @@ export default function RoomsPage() {
     () => (data?.data ?? []).map((doc) => mapRoomFromApi(doc)),
     [data?.data],
   )
+  const detailsRoom = useMemo(() => {
+    const r = rooms.find((x) => x.id === detailsId)
+    if (!r) return null
+    return {
+      ...r,
+      branchName: r.branchName ?? branchNameById.get(r.branchId),
+    }
+  }, [rooms, detailsId, branchNameById])
 
   const handleSubmit = async (values: RoomFormValues) => {
     const payload = formValuesToRoomPayload(values)
@@ -209,7 +219,8 @@ export default function RoomsPage() {
                 rooms.map((r) => (
                   <tr
                     key={r.id}
-                    className="border-b border-surface-border last:border-b-0 hover:bg-surface-elevated"
+                    onClick={() => setDetailsId(r.id)}
+                    className="cursor-pointer border-b border-surface-border last:border-b-0 hover:bg-surface-elevated"
                   >
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
@@ -275,12 +286,31 @@ export default function RoomsPage() {
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">
                         <IconButton
+                          title="View details"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setDetailsId(r.id)
+                          }}
+                        >
+                          <Eye size={15} />
+                        </IconButton>
+                        <IconButton
                           title="Edit"
-                          onClick={() => setModal({ mode: 'edit', room: r })}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setModal({ mode: 'edit', room: r })
+                          }}
                         >
                           <Pencil size={15} />
                         </IconButton>
-                        <IconButton title="Delete" danger onClick={() => confirmDelete(r)}>
+                        <IconButton
+                          title="Delete"
+                          danger
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            confirmDelete(r)
+                          }}
+                        >
                           <Trash2 size={15} />
                         </IconButton>
                       </div>
@@ -292,6 +322,13 @@ export default function RoomsPage() {
           </table>
         </div>
       </div>
+
+      <RoomDetailsDrawer
+        open={detailsId !== null}
+        room={detailsRoom}
+        onClose={() => setDetailsId(null)}
+        onEdit={(room) => setModal({ mode: 'edit', room })}
+      />
 
       <RoomFormDrawer
         open={modal.mode !== 'closed'}
@@ -333,7 +370,7 @@ function IconButton({
 }: {
   children: React.ReactNode
   title: string
-  onClick: () => void
+  onClick: (e: React.MouseEvent) => void
   danger?: boolean
 }) {
   return (

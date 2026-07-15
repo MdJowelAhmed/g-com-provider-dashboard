@@ -460,7 +460,7 @@ export default function EventFormDrawer({
           <Col span={12}>
             <Form.Item
               name="ticketPrice"
-              label="Ticket price ($)"
+              label="Ticket price (GH₵)"
               rules={[{ required: true, message: 'Ticket price is required' }]}
             >
               <InputNumber min={0} step={0.01} style={{ width: '100%' }} />

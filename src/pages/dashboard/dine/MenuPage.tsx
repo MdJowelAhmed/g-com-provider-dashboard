@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
-import { Plus, Pencil, Trash2, ImageOff } from 'lucide-react'
+import { Plus, Pencil, Trash2, ImageOff, Eye } from 'lucide-react'
 import { Modal, message } from 'antd'
 import type { FetchBaseQueryError } from '@reduxjs/toolkit/query'
 import PageHeader from '../../../components/dashboard/PageHeader'
 import SearchField from '../../../components/common/SearchField'
 import { useSearchField } from '../../../hooks/useSearchField'
 import MenuFormDrawer from './MenuFormDrawer'
+import MenuDetailsDrawer from './MenuDetailsDrawer'
 import {
   useCreateProductMutation,
   useDeleteProductMutation,
@@ -71,6 +72,8 @@ export default function MenuPage() {
   const [getPresignedUrl] = useGetPresignedUploadUrlMutation()
   const [items, setItems] = useState<MenuItem[]>([])
   const [drawer, setDrawer] = useState<DrawerState>({ mode: 'closed' })
+  const [detailsId, setDetailsId] = useState<string | null>(null)
+  const detailsItem = items.find((i) => i.id === detailsId) ?? null
 
   useEffect(() => {
     if (!data?.data) {
@@ -198,7 +201,8 @@ export default function MenuPage() {
                 items.map((item) => (
                   <tr
                     key={item.id}
-                    className="border-b border-surface-border last:border-b-0 hover:bg-surface-elevated"
+                    onClick={() => setDetailsId(item.id)}
+                    className="cursor-pointer border-b border-surface-border last:border-b-0 hover:bg-surface-elevated"
                   >
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
@@ -229,12 +233,31 @@ export default function MenuPage() {
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">
                         <IconButton
+                          title="View details"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setDetailsId(item.id)
+                          }}
+                        >
+                          <Eye size={15} />
+                        </IconButton>
+                        <IconButton
                           title="Edit"
-                          onClick={() => setDrawer({ mode: 'edit', item })}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setDrawer({ mode: 'edit', item })
+                          }}
                         >
                           <Pencil size={15} />
                         </IconButton>
-                        <IconButton title="Delete" danger onClick={() => confirmDelete(item)}>
+                        <IconButton
+                          title="Delete"
+                          danger
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            confirmDelete(item)
+                          }}
+                        >
                           <Trash2 size={15} />
                         </IconButton>
                       </div>
@@ -252,6 +275,13 @@ export default function MenuPage() {
           Failed to load menu items from API.
         </div>
       ) : null}
+
+      <MenuDetailsDrawer
+        open={detailsId !== null}
+        item={detailsItem}
+        onClose={() => setDetailsId(null)}
+        onEdit={(item) => setDrawer({ mode: 'edit', item })}
+      />
 
       <MenuFormDrawer
         open={drawer.mode !== 'closed'}
@@ -293,7 +323,7 @@ function IconButton({
 }: {
   children: React.ReactNode
   title: string
-  onClick: () => void
+  onClick: (e: React.MouseEvent) => void
   danger?: boolean
 }) {
   return (

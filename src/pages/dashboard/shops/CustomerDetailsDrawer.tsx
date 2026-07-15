@@ -44,7 +44,7 @@ function labelFor<T extends string>(
 }
 
 function formatMoney(n: number) {
-  return `$${n.toFixed(2)}`
+  return `GH₵ ${n.toFixed(2)}`
 }
 
 function formatDate(iso?: string) {
@@ -142,7 +142,7 @@ export default function CustomerDetailsDrawer({ customer, open, onClose }: Props
               <StatBlock label="Last 30d orders" value={customer.ordersLast30Days.toString()} />
               <StatBlock label="Abandoned carts" value={customer.abandonedCarts.toString()} />
               <StatBlock label="Refunds" value={customer.refundCount.toString()} />
-              <StatBlock label="Refunded $" value={formatMoney(customer.refundAmount)} />
+              <StatBlock label="Refunded GH₵" value={formatMoney(customer.refundAmount)} />
             </div>
           </section>
 

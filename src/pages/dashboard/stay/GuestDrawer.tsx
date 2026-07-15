@@ -171,7 +171,7 @@ export default function GuestDrawer({ open, guest, onClose, onUpdate, onDelete }
         />
         <StatTile
           label="Total spent"
-          value={`$${guest.totalSpent.toFixed(0)}`}
+          value={`GH₵ ${guest.totalSpent.toFixed(0)}`}
           tone="brand"
         />
         <StatTile label="Cancelled" value={guest.cancelledStays} tone="danger" />
@@ -264,7 +264,7 @@ export default function GuestDrawer({ open, guest, onClose, onUpdate, onDelete }
                     </span>
                   </td>
                   <td className="px-3 py-2 text-right font-medium text-gray-100">
-                    ${s.amount.toFixed(2)}
+                    GH₵ {s.amount.toFixed(2)}
                   </td>
                 </tr>
               ))}

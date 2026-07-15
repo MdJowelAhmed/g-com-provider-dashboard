@@ -238,7 +238,7 @@ export default function TicketDrawer({
         <table className="w-full text-sm">
           <tbody>
             <ChargeRow
-              label={`${ticket.quantity} × $${ticket.unitPrice.toFixed(2)}`}
+              label={`${ticket.quantity} × GH₵ ${ticket.unitPrice.toFixed(2)}`}
               amount={ticket.subtotal}
             />
             {ticket.discount > 0 ? (
@@ -385,7 +385,7 @@ function ChargeRow({
         {label}
       </td>
       <td className={`px-3 py-2 text-right ${toneClass[tone]} ${bold ? 'font-semibold' : ''}`}>
-        {sign}${Math.abs(amount).toFixed(2)}
+        {sign}GH₵ {Math.abs(amount).toFixed(2)}
       </td>
     </tr>
   )

@@ -41,7 +41,7 @@ function labelFor<T extends string>(
 }
 
 function formatMoney(n: number) {
-  return `$${n.toFixed(2)}`
+  return `GH₵ ${n.toFixed(2)}`
 }
 
 function formatShortDate(iso: string) {

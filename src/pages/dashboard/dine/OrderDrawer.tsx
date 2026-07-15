@@ -326,10 +326,10 @@ export default function OrderDrawer({ open, order, onClose, onUpdate, onDelete }
                 </td>
                 <td className="px-3 py-2 text-right text-gray-200">×{it.quantity}</td>
                 <td className="px-3 py-2 text-right text-gray-400">
-                  ${it.unitPrice.toFixed(2)}
+                  GH₵ {it.unitPrice.toFixed(2)}
                 </td>
                 <td className="px-3 py-2 text-right font-medium text-gray-100">
-                  ${it.lineTotal.toFixed(2)}
+                  GH₵ {it.lineTotal.toFixed(2)}
                 </td>
               </tr>
             ))}
@@ -500,7 +500,7 @@ function ChargeRow({
       <td
         className={`px-3 py-2 text-right ${toneClass[tone]} ${bold ? 'font-semibold' : ''}`}
       >
-        {sign}${Math.abs(amount).toFixed(2)}
+        {sign}GH₵ {Math.abs(amount).toFixed(2)}
       </td>
     </tr>
   )

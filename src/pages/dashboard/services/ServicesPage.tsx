@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react'
-import { Plus, Pencil, Trash2, ImageOff, Clock } from 'lucide-react'
+import { Plus, Pencil, Trash2, ImageOff, Clock, Eye } from 'lucide-react'
 import { Modal, message } from 'antd'
 import type { FetchBaseQueryError } from '@reduxjs/toolkit/query'
 import PageHeader from '../../../components/dashboard/PageHeader'
 import SearchField from '../../../components/common/SearchField'
 import { useSearchField } from '../../../hooks/useSearchField'
 import ServiceFormDrawer from './ServiceFormDrawer'
+import ServiceDetailsDrawer from './ServiceDetailsDrawer'
 import { PRICING_TYPE_OPTIONS, type Service, type ServiceFormValues } from './serviceTypes'
 import { formValuesToServicePayload, mapServiceFromApi } from './serviceMapping'
 import {
@@ -39,7 +40,7 @@ function getApiErrorMessage(error: unknown, fallback: string) {
 
 function formatPrice(n: number | null | undefined) {
   if (n === null || n === undefined) return '—'
-  return `$${n.toFixed(2)}`
+  return `GH₵ ${n.toFixed(2)}`
 }
 
 function pricingLabel(t: Service['pricingType']) {
@@ -48,6 +49,7 @@ function pricingLabel(t: Service['pricingType']) {
 
 export default function ServicesPage() {
   const [modal, setModal] = useState<ModalState>({ mode: 'closed' })
+  const [detailsId, setDetailsId] = useState<string | null>(null)
   const [pricingFilter, setPricingFilter] = useState<string>(allFilter)
   const { inputValue, setInputValue, searchTerm, clear, flush, isDebouncing } =
     useSearchField({ minChars: 2 })
@@ -87,8 +89,23 @@ export default function ServicesPage() {
     () => (data?.data ?? []).map((doc) => mapServiceFromApi(doc)),
     [data?.data],
   )
-
-
+  const detailsService = useMemo(() => {
+    const s = services.find((x) => x.id === detailsId)
+    if (!s) return null
+    return {
+      ...s,
+      businessCategoryName:
+        s.businessCategoryName ?? businessCategoryNameById.get(s.businessCategoryId),
+      subCategoryName: s.subCategoryName ?? subCategoryNameById.get(s.subCategoryId),
+      branchName: s.branchName ?? branchNameById.get(s.branchId),
+    }
+  }, [
+    services,
+    detailsId,
+    businessCategoryNameById,
+    subCategoryNameById,
+    branchNameById,
+  ])
 
   const handleSubmit = async (values: ServiceFormValues) => {
     const payload = formValuesToServicePayload(values)
@@ -216,7 +233,8 @@ export default function ServicesPage() {
                 services?.map((s) => (
                   <tr
                     key={s.id}
-                    className="border-b border-surface-border last:border-b-0 hover:bg-surface-elevated"
+                    onClick={() => setDetailsId(s.id)}
+                    className="cursor-pointer border-b border-surface-border last:border-b-0 hover:bg-surface-elevated"
                   >
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
@@ -258,10 +276,32 @@ export default function ServicesPage() {
                     <td className="px-4 py-3 text-gray-300">{s.maxBookingPerDay ?? '—'}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">
-                        <IconButton title="Edit" onClick={() => setModal({ mode: 'edit', service: s })}>
+                        <IconButton
+                          title="View details"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setDetailsId(s.id)
+                          }}
+                        >
+                          <Eye size={15} />
+                        </IconButton>
+                        <IconButton
+                          title="Edit"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setModal({ mode: 'edit', service: s })
+                          }}
+                        >
                           <Pencil size={15} />
                         </IconButton>
-                        <IconButton title="Delete" danger onClick={() => confirmDelete(s)}>
+                        <IconButton
+                          title="Delete"
+                          danger
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            confirmDelete(s)
+                          }}
+                        >
                           <Trash2 size={15} />
                         </IconButton>
                       </div>
@@ -273,6 +313,13 @@ export default function ServicesPage() {
           </table>
         </div>
       </div>
+
+      <ServiceDetailsDrawer
+        open={detailsId !== null}
+        service={detailsService}
+        onClose={() => setDetailsId(null)}
+        onEdit={(service) => setModal({ mode: 'edit', service })}
+      />
 
       <ServiceFormDrawer
         open={modal.mode !== 'closed'}
@@ -321,7 +368,7 @@ function IconButton({
 }: {
   children: React.ReactNode
   title: string
-  onClick: () => void
+  onClick: (e: React.MouseEvent) => void
   danger?: boolean
 }) {
   return (

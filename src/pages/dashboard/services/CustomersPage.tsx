@@ -94,7 +94,7 @@ export default function CustomersPage() {
         <SummaryTile label="Blocked" value={totals.blocked} tone="danger" />
         <SummaryTile
           label="Lifetime revenue"
-          value={`$${totals.lifetimeRevenue.toFixed(0)}`}
+          value={`GH₵ ${totals.lifetimeRevenue.toFixed(0)}`}
           tone="brand"
           compact
         />
@@ -206,7 +206,7 @@ export default function CustomersPage() {
                       </td>
                       <td className="px-4 py-3 text-right">
                         <div className="font-semibold text-gray-100">
-                          ${c.totalSpent.toFixed(0)}
+                          GH₵ {c.totalSpent.toFixed(0)}
                         </div>
                         {c.preferredService ? (
                           <div

@@ -18,7 +18,7 @@ type Props = {
 }
 
 function formatMoney(n: number) {
-  return `$${n.toFixed(2)}`
+  return `GH₵ ${n.toFixed(2)}`
 }
 
 function formatDate(iso: string) {

@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react'
-import { Plus, Pencil, Trash2, ImageOff, Calendar, Users } from 'lucide-react'
+import { Plus, Pencil, Trash2, ImageOff, Calendar, Users, Eye } from 'lucide-react'
 import { Modal, message } from 'antd'
 import type { FetchBaseQueryError } from '@reduxjs/toolkit/query'
 import PageHeader from '../../../components/dashboard/PageHeader'
 import SearchField from '../../../components/common/SearchField'
 import { useSearchField } from '../../../hooks/useSearchField'
 import EventFormDrawer from './EventFormDrawer'
+import EventDetailsDrawer from './EventDetailsDrawer'
 import { EVENT_STATUS_OPTIONS, type Event, type EventFormValues } from './eventTypes'
 import { formValuesToEventPayload, mapEventFromApi } from './eventMapping'
 import {
@@ -34,7 +35,7 @@ function getApiErrorMessage(error: unknown, fallback: string) {
 
 function formatPrice(n: number | null | undefined) {
   if (n == null) return '—'
-  return `$${n.toFixed(0)}`
+  return `GH₵ ${n.toFixed(0)}`
 }
 
 function formatDateTime(value: string | null | undefined) {
@@ -59,6 +60,7 @@ function statusBadge(status: string) {
 
 export default function EventsPage() {
   const [modal, setModal] = useState<ModalState>({ mode: 'closed' })
+  const [detailsId, setDetailsId] = useState<string | null>(null)
   const [statusFilter, setStatusFilter] = useState<string>(allFilter)
   const { inputValue, setInputValue, searchTerm, clear, flush, isDebouncing } =
     useSearchField({ minChars: 2 })
@@ -74,8 +76,7 @@ export default function EventsPage() {
   const [deleteEvent] = useDeleteEventMutation()
 
   const events = useMemo(() => (data?.data ?? []).map((doc) => mapEventFromApi(doc)), [data?.data])
-
-
+  const detailsEvent = events.find((e) => e.id === detailsId) ?? null
 
   const handleSubmit = async (values: EventFormValues) => {
     const payload = formValuesToEventPayload(values)
@@ -205,7 +206,8 @@ export default function EventsPage() {
                 events?.map((event) => (
                   <tr
                     key={event.id}
-                    className="border-b border-surface-border last:border-b-0 hover:bg-surface-elevated"
+                    onClick={() => setDetailsId(event.id)}
+                    className="cursor-pointer border-b border-surface-border last:border-b-0 hover:bg-surface-elevated"
                   >
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
@@ -248,12 +250,31 @@ export default function EventsPage() {
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">
                         <IconButton
+                          title="View details"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setDetailsId(event.id)
+                          }}
+                        >
+                          <Eye size={15} />
+                        </IconButton>
+                        <IconButton
                           title="Edit"
-                          onClick={() => setModal({ mode: 'edit', event })}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setModal({ mode: 'edit', event })
+                          }}
                         >
                           <Pencil size={15} />
                         </IconButton>
-                        <IconButton title="Delete" danger onClick={() => confirmDelete(event)}>
+                        <IconButton
+                          title="Delete"
+                          danger
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            confirmDelete(event)
+                          }}
+                        >
                           <Trash2 size={15} />
                         </IconButton>
                       </div>
@@ -265,6 +286,13 @@ export default function EventsPage() {
           </table>
         </div>
       </div>
+
+      <EventDetailsDrawer
+        open={detailsId !== null}
+        event={detailsEvent}
+        onClose={() => setDetailsId(null)}
+        onEdit={(event) => setModal({ mode: 'edit', event })}
+      />
 
       <EventFormDrawer
         open={modal.mode !== 'closed'}
@@ -306,7 +334,7 @@ function IconButton({
 }: {
   children: React.ReactNode
   title: string
-  onClick: () => void
+  onClick: (e: React.MouseEvent) => void
   danger?: boolean
 }) {
   return (

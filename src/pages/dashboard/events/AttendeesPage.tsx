@@ -9,9 +9,11 @@ import {
   User as UserIcon,
   Phone,
   Mail,
+  Eye,
 } from 'lucide-react'
 import { message, Pagination } from 'antd'
 import PageHeader from '../../../components/dashboard/PageHeader'
+import TicketDrawer from './TicketDrawer'
 import {
   INITIAL_TICKETS,
   TICKET_CHANNEL_LABELS,
@@ -42,6 +44,7 @@ export default function AttendeesPage() {
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
+  const [detailsId, setDetailsId] = useState<string | null>(null)
 
   useEffect(() => {
     setPage(1)
@@ -120,6 +123,7 @@ export default function AttendeesPage() {
   }, [filtered, page, pageSize])
 
   const selectedEvent = events.find((e) => e.id === eventFilter) ?? null
+  const detailsTicket = tickets.find((t) => t.id === detailsId) ?? null
 
   const checkIn = (id: string) => {
     setTickets((prev) =>
@@ -139,6 +143,15 @@ export default function AttendeesPage() {
         t.id === id ? { ...t, checkedIn: false, checkedInAt: null } : t,
       ),
     )
+  }
+
+  const handleUpdate = (id: string, patch: Partial<Ticket>) => {
+    setTickets((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)))
+  }
+
+  const handleDelete = (id: string) => {
+    setTickets((prev) => prev.filter((t) => t.id !== id))
+    setDetailsId(null)
   }
 
   return (
@@ -264,7 +277,8 @@ export default function AttendeesPage() {
                 paginated.map((t) => (
                   <tr
                     key={t.id}
-                    className={`border-b border-surface-border last:border-b-0 ${
+                    onClick={() => setDetailsId(t.id)}
+                    className={`cursor-pointer border-b border-surface-border last:border-b-0 ${
                       t.checkedIn ? 'bg-accent-success/5' : 'hover:bg-surface-elevated'
                     }`}
                   >
@@ -336,11 +350,25 @@ export default function AttendeesPage() {
                       )}
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex items-center justify-end">
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          type="button"
+                          title="View details"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setDetailsId(t.id)
+                          }}
+                          className="flex h-9 w-9 items-center justify-center rounded-md border border-transparent text-gray-300 hover:border-surface-border hover:bg-surface-elevated hover:text-white"
+                        >
+                          <Eye size={15} />
+                        </button>
                         {t.checkedIn ? (
                           <button
                             type="button"
-                            onClick={() => undoCheckIn(t.id)}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              undoCheckIn(t.id)
+                            }}
                             className="inline-flex h-9 items-center gap-1.5 rounded-md border border-surface-border px-3 text-xs font-medium text-gray-300 hover:bg-surface-elevated hover:text-white"
                           >
                             <Undo2 size={13} /> Undo
@@ -348,7 +376,10 @@ export default function AttendeesPage() {
                         ) : (
                           <button
                             type="button"
-                            onClick={() => checkIn(t.id)}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              checkIn(t.id)
+                            }}
                             className="inline-flex h-9 items-center gap-1.5 rounded-md bg-accent-success px-4 text-sm font-semibold text-white hover:opacity-90"
                           >
                             <CheckCircle2 size={14} /> Check in
@@ -383,6 +414,14 @@ export default function AttendeesPage() {
           </div>
         ) : null}
       </div>
+
+      <TicketDrawer
+        open={detailsId !== null}
+        ticket={detailsTicket}
+        onClose={() => setDetailsId(null)}
+        onUpdate={handleUpdate}
+        onDelete={handleDelete}
+      />
     </div>
   )
 }

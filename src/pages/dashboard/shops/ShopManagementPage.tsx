@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react'
-import { Plus, Search, Pencil, Trash2, MapPin, Clock, Phone } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, MapPin, Clock, Phone, Eye } from 'lucide-react'
 import { Modal, message } from 'antd'
 import type { FetchBaseQueryError } from '@reduxjs/toolkit/query'
 import PageHeader from '../../../components/dashboard/PageHeader'
 import ShopFormDrawer from './ShopFormDrawer'
+import ShopDetailsDrawer from './ShopDetailsDrawer'
 import { mapShopFromApi, weekdayLabel, type ShopBranch } from './shopTypes'
 import {
   toShopPayload,
@@ -57,6 +58,7 @@ function formatDate(iso: string) {
 export default function ShopManagementPage() {
   const [modal, setModal] = useState<ModalState>({ mode: 'closed' })
   const [search, setSearch] = useState('')
+  const [detailsId, setDetailsId] = useState<string | null>(null)
 
   const { data, isLoading, isFetching, isError } = useGetShopsQuery({ page: 1, limit: 50 })
   const [createShop, { isLoading: isCreating }] = useCreateShopMutation()
@@ -80,6 +82,8 @@ export default function ShopManagementPage() {
         formatLocation(s).toLowerCase().includes(q),
     )
   }, [shops, search])
+
+  const detailsShop = shops.find((s) => s.id === detailsId) ?? null
 
   const totals = useMemo(() => {
     const withHours = shops.filter((s) => s.openTime && s.closeTime).length
@@ -210,7 +214,8 @@ export default function ShopManagementPage() {
                 filtered.map((shop) => (
                   <tr
                     key={shop.id}
-                    className="border-b border-surface-border last:border-b-0 hover:bg-surface-elevated"
+                    onClick={() => setDetailsId(shop.id)}
+                    className="cursor-pointer border-b border-surface-border last:border-b-0 hover:bg-surface-elevated"
                   >
                     <td className="px-4 py-3">
                       <div className="min-w-0">
@@ -251,12 +256,31 @@ export default function ShopManagementPage() {
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">
                         <IconButton
+                          title="View details"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setDetailsId(shop.id)
+                          }}
+                        >
+                          <Eye size={15} />
+                        </IconButton>
+                        <IconButton
                           title="Edit"
-                          onClick={() => setModal({ mode: 'edit', shop })}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setModal({ mode: 'edit', shop })
+                          }}
                         >
                           <Pencil size={15} />
                         </IconButton>
-                        <IconButton title="Delete" danger onClick={() => confirmDelete(shop)}>
+                        <IconButton
+                          title="Delete"
+                          danger
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            confirmDelete(shop)
+                          }}
+                        >
                           <Trash2 size={15} />
                         </IconButton>
                       </div>
@@ -268,6 +292,13 @@ export default function ShopManagementPage() {
           </table>
         </div>
       </div>
+
+      <ShopDetailsDrawer
+        open={detailsId !== null}
+        shop={detailsShop}
+        onClose={() => setDetailsId(null)}
+        onEdit={(shop) => setModal({ mode: 'edit', shop })}
+      />
 
       <ShopFormDrawer
         open={modal.mode !== 'closed'}
@@ -289,7 +320,7 @@ function IconButton({
 }: {
   children: React.ReactNode
   title: string
-  onClick: () => void
+  onClick: (e: React.MouseEvent) => void
   danger?: boolean
 }) {
   return (

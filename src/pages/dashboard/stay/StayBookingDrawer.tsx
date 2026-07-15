@@ -234,7 +234,7 @@ export default function StayBookingDrawer({
             <div className="shrink-0 text-right">
               <div className="text-xs text-gray-500">Rate / night</div>
               <div className="font-medium text-gray-100">
-                ${booking.room.nightlyRate.toFixed(2)}
+                GH₵ {booking.room.nightlyRate.toFixed(2)}
               </div>
             </div>
           </div>
@@ -273,7 +273,7 @@ export default function StayBookingDrawer({
         <table className="w-full text-sm">
           <tbody>
             <ChargeRow
-              label={`Room (${booking.nights} × $${booking.room.nightlyRate.toFixed(2)})`}
+              label={`Room (${booking.nights} × GH₵ ${booking.room.nightlyRate.toFixed(2)})`}
               amount={booking.baseAmount}
             />
             <ChargeRow label="Taxes & fees" amount={booking.taxesFees} />
@@ -454,7 +454,7 @@ function ChargeRow({
       <td
         className={`px-3 py-2 text-right ${toneClass[tone]} ${bold ? 'font-semibold' : ''}`}
       >
-        {sign}${Math.abs(amount).toFixed(2)}
+        {sign}GH₵ {Math.abs(amount).toFixed(2)}
       </td>
     </tr>
   )

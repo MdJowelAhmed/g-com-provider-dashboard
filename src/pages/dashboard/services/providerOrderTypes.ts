@@ -403,7 +403,7 @@ export function paymentStatusLabel(status: string) {
 }
 
 export function formatMoney(amount: number) {
-  return `₵${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  return `GH₵ ${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
 export function formatDateTime(iso: string) {

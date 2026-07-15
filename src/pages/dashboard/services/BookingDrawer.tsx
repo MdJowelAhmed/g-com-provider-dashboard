@@ -283,10 +283,10 @@ export default function BookingDrawer({ open, booking, onClose, onUpdate, onDele
       <SectionTitle>Payment</SectionTitle>
       <div className="mb-4 grid grid-cols-3 gap-3">
         <InfoCard icon={<CreditCard size={14} />} label="Total">
-          <div className="font-semibold text-gray-100">${booking.amount.toFixed(2)}</div>
+          <div className="font-semibold text-gray-100">GH₵ {booking.amount.toFixed(2)}</div>
         </InfoCard>
         <InfoCard icon={<CreditCard size={14} />} label="Paid">
-          <div className="font-semibold text-gray-100">${booking.paidAmount.toFixed(2)}</div>
+          <div className="font-semibold text-gray-100">GH₵ {booking.paidAmount.toFixed(2)}</div>
         </InfoCard>
         <InfoCard icon={<CreditCard size={14} />} label="Method">
           <div className="font-medium text-gray-100">

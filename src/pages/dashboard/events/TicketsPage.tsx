@@ -261,7 +261,7 @@ export default function TicketsPage() {
                       {t.total === 0 ? (
                         <span className="font-medium text-accent-success">Free</span>
                       ) : (
-                        <div className="font-semibold text-gray-100">${t.total.toFixed(2)}</div>
+                        <div className="font-semibold text-gray-100">GH₵ {t.total.toFixed(2)}</div>
                       )}
                     </td>
                     <td className="px-4 py-3">

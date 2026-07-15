@@ -262,7 +262,7 @@ export default function ProductFormModal({
           <Col span={8}>
             <Form.Item
               name="price"
-              label="Price ($)"
+              label="Price (GH₵)"
               rules={[{ required: true, message: 'Price is required' }]}
             >
               <InputNumber min={0} step={0.01} style={{ width: '100%' }} />
@@ -272,7 +272,7 @@ export default function ProductFormModal({
           <Col span={8}>
             <Form.Item
               name="deliveryFee"
-              label="Delivery fee ($)"
+              label="Delivery fee (GH₵)"
               rules={[{ required: true, message: 'Delivery fee is required' }]}
             >
               <InputNumber min={0} step={0.01} style={{ width: '100%' }} />

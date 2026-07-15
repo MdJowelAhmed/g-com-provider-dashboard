@@ -157,7 +157,7 @@ export default function OrdersPage() {
         <SummaryTile label="On the way" value={totals.outForDelivery} tone="info" />
         <SummaryTile
           label="Revenue"
-          value={`$${totals.revenue.toFixed(2)}`}
+          value={`GH₵ ${totals.revenue.toFixed(2)}`}
           tone="success"
           compact
         />
@@ -296,11 +296,11 @@ export default function OrdersPage() {
                       </td>
                       <td className="px-4 py-3 text-right">
                         <div className="font-semibold text-gray-100">
-                          ${o.total.toFixed(2)}
+                          GH₵ {o.total.toFixed(2)}
                         </div>
                         {o.deliveryFee > 0 ? (
                           <div className="text-[11px] text-gray-500">
-                            incl. ${o.deliveryFee.toFixed(2)} delivery
+                            incl. GH₵ {o.deliveryFee.toFixed(2)} delivery
                           </div>
                         ) : null}
                       </td>

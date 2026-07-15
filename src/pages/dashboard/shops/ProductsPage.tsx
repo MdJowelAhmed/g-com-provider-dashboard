@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
-import { Plus, Pencil, Trash2, ImageOff } from 'lucide-react'
+import { Plus, Pencil, Trash2, ImageOff, Eye } from 'lucide-react'
 import { Modal, message } from 'antd'
 import type { FetchBaseQueryError } from '@reduxjs/toolkit/query'
 import PageHeader from '../../../components/dashboard/PageHeader'
 import SearchField from '../../../components/common/SearchField'
 import { useSearchField } from '../../../hooks/useSearchField'
 import ProductFormModal, { type ProductSubmitValues } from './ProductFormModal'
+import ProductDetailsDrawer from './ProductDetailsDrawer'
 import {
   useCreateProductMutation,
   useDeleteProductMutation,
@@ -36,7 +37,7 @@ const allFilter = '__all__'
 
 function formatPrice(n: number | null | undefined) {
   if (n === null || n === undefined) return '—'
-  return `$${n.toFixed(2)}`
+  return `GH₵ ${n.toFixed(2)}`
 }
 
 function formatDateTime(value: string | null | undefined) {
@@ -150,6 +151,8 @@ export default function ProductsPage() {
   const [getPresignedUrl] = useGetPresignedUploadUrlMutation()
   const [products, setProducts] = useState<Product[]>([])
   const [modal, setModal] = useState<ModalState>({ mode: 'closed' })
+  const [detailsId, setDetailsId] = useState<string | null>(null)
+  const detailsProduct = products.find((p) => p.id === detailsId) ?? null
 
   useEffect(() => {
     if (!data?.data) {
@@ -310,7 +313,8 @@ export default function ProductsPage() {
                 products.map((p) => (
                   <tr
                     key={p.id}
-                    className="border-b border-surface-border last:border-b-0 hover:bg-surface-elevated"
+                    onClick={() => setDetailsId(p.id)}
+                    className="cursor-pointer border-b border-surface-border last:border-b-0 hover:bg-surface-elevated"
                   >
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
@@ -340,12 +344,31 @@ export default function ProductsPage() {
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">
                         <IconButton
+                          title="View details"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setDetailsId(p.id)
+                          }}
+                        >
+                          <Eye size={15} />
+                        </IconButton>
+                        <IconButton
                           title="Edit"
-                          onClick={() => setModal({ mode: 'edit', product: p })}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setModal({ mode: 'edit', product: p })
+                          }}
                         >
                           <Pencil size={15} />
                         </IconButton>
-                        <IconButton title="Delete" danger onClick={() => confirmDelete(p)}>
+                        <IconButton
+                          title="Delete"
+                          danger
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            confirmDelete(p)
+                          }}
+                        >
                           <Trash2 size={15} />
                         </IconButton>
                       </div>
@@ -363,6 +386,13 @@ export default function ProductsPage() {
           Failed to load products from API.
         </div>
       ) : null}
+
+      <ProductDetailsDrawer
+        open={detailsId !== null}
+        product={detailsProduct}
+        onClose={() => setDetailsId(null)}
+        onEdit={(p) => setModal({ mode: 'edit', product: p })}
+      />
 
       <ProductFormModal
         open={modal.mode !== 'closed'}
@@ -404,7 +434,7 @@ function IconButton({
 }: {
   children: React.ReactNode
   title: string
-  onClick: () => void
+  onClick: (e: React.MouseEvent) => void
   danger?: boolean
 }) {
   return (

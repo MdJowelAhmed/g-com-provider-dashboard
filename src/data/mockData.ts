@@ -40,7 +40,7 @@ type RoleMock = {
 export const ROLE_MOCK: Record<Role, RoleMock> = {
   services: {
     stats: [
-      { label: 'Service revenue (30d)', value: '$4,820', delta: '+12.4%', trend: 'up', icon: DollarSign },
+      { label: 'Service revenue (30d)', value: 'GH₵ 4,820', delta: '+12.4%', trend: 'up', icon: DollarSign },
       { label: 'Active bookings', value: '28', delta: '+5', trend: 'up', icon: ClipboardList },
       { label: 'Open requests', value: '14', delta: '+3', trend: 'up', icon: ListTodo },
       { label: 'Avg. rating', value: '4.7', delta: '+0.1', trend: 'up', icon: Star },
@@ -57,10 +57,10 @@ export const ROLE_MOCK: Record<Role, RoleMock> = {
           { key: 'status', label: 'Status' },
         ],
         rows: [
-          { name: 'Deep home cleaning', category: 'Cleaning', price: '$120', duration: '3h', status: 'Active' },
-          { name: 'AC servicing', category: 'Electrical', price: '$75', duration: '1h', status: 'Active' },
-          { name: 'Plumbing repair', category: 'Plumbing', price: '$60', duration: '1.5h', status: 'Active' },
-          { name: 'Bridal makeup', category: 'Beauty', price: '$250', duration: '2h', status: 'Draft' },
+          { name: 'Deep home cleaning', category: 'Cleaning', price: 'GH₵ 120', duration: '3h', status: 'Active' },
+          { name: 'AC servicing', category: 'Electrical', price: 'GH₵ 75', duration: '1h', status: 'Active' },
+          { name: 'Plumbing repair', category: 'Plumbing', price: 'GH₵ 60', duration: '1.5h', status: 'Active' },
+          { name: 'Bridal makeup', category: 'Beauty', price: 'GH₵ 250', duration: '2h', status: 'Draft' },
         ],
       },
       bookings: {
@@ -75,10 +75,10 @@ export const ROLE_MOCK: Record<Role, RoleMock> = {
           { key: 'amount', label: 'Amount', align: 'right' },
         ],
         rows: [
-          { id: '#BK-1042', customer: 'Ayesha Rahman', service: 'Deep home cleaning', date: 'Apr 22, 10:00', status: 'Confirmed', amount: '$120' },
-          { id: '#BK-1041', customer: 'Tanvir Hasan', service: 'AC servicing', date: 'Apr 21, 14:30', status: 'In progress', amount: '$75' },
-          { id: '#BK-1039', customer: 'Nusrat Jahan', service: 'Plumbing repair', date: 'Apr 20, 11:00', status: 'Completed', amount: '$60' },
-          { id: '#BK-1037', customer: 'Rafi Ahmed', service: 'Deep home cleaning', date: 'Apr 19, 09:00', status: 'Completed', amount: '$120' },
+          { id: '#BK-1042', customer: 'Ayesha Rahman', service: 'Deep home cleaning', date: 'Apr 22, 10:00', status: 'Confirmed', amount: 'GH₵ 120' },
+          { id: '#BK-1041', customer: 'Tanvir Hasan', service: 'AC servicing', date: 'Apr 21, 14:30', status: 'In progress', amount: 'GH₵ 75' },
+          { id: '#BK-1039', customer: 'Nusrat Jahan', service: 'Plumbing repair', date: 'Apr 20, 11:00', status: 'Completed', amount: 'GH₵ 60' },
+          { id: '#BK-1037', customer: 'Rafi Ahmed', service: 'Deep home cleaning', date: 'Apr 19, 09:00', status: 'Completed', amount: 'GH₵ 120' },
         ],
       },
       customers: {
@@ -91,9 +91,9 @@ export const ROLE_MOCK: Record<Role, RoleMock> = {
           { key: 'spend', label: 'Lifetime spend', align: 'right' },
         ],
         rows: [
-          { name: 'Ayesha Rahman', email: 'ayesha@example.com', bookings: '6', spend: '$720' },
-          { name: 'Tanvir Hasan', email: 'tanvir@example.com', bookings: '4', spend: '$300' },
-          { name: 'Nusrat Jahan', email: 'nusrat@example.com', bookings: '3', spend: '$180' },
+          { name: 'Ayesha Rahman', email: 'ayesha@example.com', bookings: '6', spend: 'GH₵ 720' },
+          { name: 'Tanvir Hasan', email: 'tanvir@example.com', bookings: '4', spend: 'GH₵ 300' },
+          { name: 'Nusrat Jahan', email: 'nusrat@example.com', bookings: '3', spend: 'GH₵ 180' },
         ],
       },
     },
@@ -101,7 +101,7 @@ export const ROLE_MOCK: Record<Role, RoleMock> = {
 
   stay: {
     stats: [
-      { label: 'Hotel revenue (30d)', value: '$18,450', delta: '+9.1%', trend: 'up', icon: DollarSign },
+      { label: 'Hotel revenue (30d)', value: 'GH₵ 18,450', delta: '+9.1%', trend: 'up', icon: DollarSign },
       { label: 'Occupancy rate', value: '78%', delta: '+4%', trend: 'up', icon: BedDouble },
       { label: 'Room bookings', value: '64', delta: '+12', trend: 'up', icon: CalendarDays },
       { label: 'Avg. rating', value: '4.6', delta: '-0.1', trend: 'down', icon: Star },
@@ -118,11 +118,11 @@ export const ROLE_MOCK: Record<Role, RoleMock> = {
           { key: 'status', label: 'Status' },
         ],
         rows: [
-          { room: '101', type: 'Deluxe King', capacity: '2', price: '$180', status: 'Occupied' },
-          { room: '102', type: 'Deluxe King', capacity: '2', price: '$180', status: 'Available' },
-          { room: '201', type: 'Family Suite', capacity: '4', price: '$320', status: 'Occupied' },
-          { room: '202', type: 'Twin', capacity: '2', price: '$140', status: 'Cleaning' },
-          { room: '301', type: 'Presidential', capacity: '4', price: '$620', status: 'Available' },
+          { room: '101', type: 'Deluxe King', capacity: '2', price: 'GH₵ 180', status: 'Occupied' },
+          { room: '102', type: 'Deluxe King', capacity: '2', price: 'GH₵ 180', status: 'Available' },
+          { room: '201', type: 'Family Suite', capacity: '4', price: 'GH₵ 320', status: 'Occupied' },
+          { room: '202', type: 'Twin', capacity: '2', price: 'GH₵ 140', status: 'Cleaning' },
+          { room: '301', type: 'Presidential', capacity: '4', price: 'GH₵ 620', status: 'Available' },
         ],
       },
       reservations: {
@@ -163,7 +163,7 @@ export const ROLE_MOCK: Record<Role, RoleMock> = {
 
   dine: {
     stats: [
-      { label: 'Food revenue (30d)', value: '$12,340', delta: '+6.8%', trend: 'up', icon: DollarSign },
+      { label: 'Food revenue (30d)', value: 'GH₵ 12,340', delta: '+6.8%', trend: 'up', icon: DollarSign },
       { label: 'Total orders', value: '482', delta: '+54', trend: 'up', icon: ShoppingBag },
       { label: 'Table reservations', value: '36', delta: '+8', trend: 'up', icon: CalendarDays },
       { label: 'Restaurant rating', value: '4.5', delta: '+0.2', trend: 'up', icon: Star },
@@ -179,10 +179,10 @@ export const ROLE_MOCK: Record<Role, RoleMock> = {
           { key: 'status', label: 'Status' },
         ],
         rows: [
-          { dish: 'Margherita Pizza', category: 'Pizza', price: '$14', status: 'Available' },
-          { dish: 'Chicken Biryani', category: 'Mains', price: '$12', status: 'Available' },
-          { dish: 'Caesar Salad', category: 'Salads', price: '$9', status: 'Available' },
-          { dish: 'Chocolate Lava Cake', category: 'Desserts', price: '$7', status: 'Out of stock' },
+          { dish: 'Margherita Pizza', category: 'Pizza', price: 'GH₵ 14', status: 'Available' },
+          { dish: 'Chicken Biryani', category: 'Mains', price: 'GH₵ 12', status: 'Available' },
+          { dish: 'Caesar Salad', category: 'Salads', price: 'GH₵ 9', status: 'Available' },
+          { dish: 'Chocolate Lava Cake', category: 'Desserts', price: 'GH₵ 7', status: 'Out of stock' },
         ],
       },
       orders: {
@@ -197,10 +197,10 @@ export const ROLE_MOCK: Record<Role, RoleMock> = {
           { key: 'total', label: 'Total', align: 'right' },
         ],
         rows: [
-          { id: '#OD-8821', customer: 'Walk-in T4', items: '3', type: 'Dine-in', status: 'Preparing', total: '$42' },
-          { id: '#OD-8820', customer: 'Nadir H.', items: '2', type: 'Delivery', status: 'Out for delivery', total: '$28' },
-          { id: '#OD-8819', customer: 'Walk-in T2', items: '5', type: 'Dine-in', status: 'Served', total: '$67' },
-          { id: '#OD-8818', customer: 'Aisha K.', items: '1', type: 'Takeout', status: 'Ready', total: '$12' },
+          { id: '#OD-8821', customer: 'Walk-in T4', items: '3', type: 'Dine-in', status: 'Preparing', total: 'GH₵ 42' },
+          { id: '#OD-8820', customer: 'Nadir H.', items: '2', type: 'Delivery', status: 'Out for delivery', total: 'GH₵ 28' },
+          { id: '#OD-8819', customer: 'Walk-in T2', items: '5', type: 'Dine-in', status: 'Served', total: 'GH₵ 67' },
+          { id: '#OD-8818', customer: 'Aisha K.', items: '1', type: 'Takeout', status: 'Ready', total: 'GH₵ 12' },
         ],
       },
     },
@@ -208,7 +208,7 @@ export const ROLE_MOCK: Record<Role, RoleMock> = {
 
   shops: {
     stats: [
-      { label: 'Store revenue (30d)', value: '$9,720', delta: '+14.2%', trend: 'up', icon: DollarSign },
+      { label: 'Store revenue (30d)', value: 'GH₵ 9,720', delta: '+14.2%', trend: 'up', icon: DollarSign },
       { label: 'Orders', value: '214', delta: '+32', trend: 'up', icon: ShoppingBag },
       { label: 'Customers', value: '892', delta: '+41', trend: 'up', icon: Users },
       { label: 'Product rating', value: '4.8', delta: '+0.1', trend: 'up', icon: Star },
@@ -225,10 +225,10 @@ export const ROLE_MOCK: Record<Role, RoleMock> = {
           { key: 'status', label: 'Status' },
         ],
         rows: [
-          { name: 'Classic Denim Jacket', sku: 'DJ-001', stock: '24', price: '$65', status: 'Active' },
-          { name: 'Wireless Headphones', sku: 'WH-210', stock: '8', price: '$120', status: 'Low stock' },
-          { name: 'Leather Wallet', sku: 'LW-045', stock: '40', price: '$35', status: 'Active' },
-          { name: 'Running Shoes', sku: 'RS-114', stock: '0', price: '$89', status: 'Out of stock' },
+          { name: 'Classic Denim Jacket', sku: 'DJ-001', stock: '24', price: 'GH₵ 65', status: 'Active' },
+          { name: 'Wireless Headphones', sku: 'WH-210', stock: '8', price: 'GH₵ 120', status: 'Low stock' },
+          { name: 'Leather Wallet', sku: 'LW-045', stock: '40', price: 'GH₵ 35', status: 'Active' },
+          { name: 'Running Shoes', sku: 'RS-114', stock: '0', price: 'GH₵ 89', status: 'Out of stock' },
         ],
       },
       orders: {
@@ -242,10 +242,10 @@ export const ROLE_MOCK: Record<Role, RoleMock> = {
           { key: 'status', label: 'Status' },
         ],
         rows: [
-          { id: '#SH-5501', customer: 'Jahid Islam', items: '3', total: '$215', status: 'Shipped' },
-          { id: '#SH-5500', customer: 'Fariha Akter', items: '1', total: '$65', status: 'Processing' },
-          { id: '#SH-5499', customer: 'Rayhan Khan', items: '2', total: '$155', status: 'Delivered' },
-          { id: '#SH-5498', customer: 'Mim Rahman', items: '4', total: '$140', status: 'Delivered' },
+          { id: '#SH-5501', customer: 'Jahid Islam', items: '3', total: 'GH₵ 215', status: 'Shipped' },
+          { id: '#SH-5500', customer: 'Fariha Akter', items: '1', total: 'GH₵ 65', status: 'Processing' },
+          { id: '#SH-5499', customer: 'Rayhan Khan', items: '2', total: 'GH₵ 155', status: 'Delivered' },
+          { id: '#SH-5498', customer: 'Mim Rahman', items: '4', total: 'GH₵ 140', status: 'Delivered' },
         ],
       },
       customers: {
@@ -258,9 +258,9 @@ export const ROLE_MOCK: Record<Role, RoleMock> = {
           { key: 'spend', label: 'Spend', align: 'right' },
         ],
         rows: [
-          { name: 'Jahid Islam', email: 'jahid@example.com', orders: '12', spend: '$1,820' },
-          { name: 'Fariha Akter', email: 'fariha@example.com', orders: '5', spend: '$420' },
-          { name: 'Rayhan Khan', email: 'rayhan@example.com', orders: '3', spend: '$290' },
+          { name: 'Jahid Islam', email: 'jahid@example.com', orders: '12', spend: 'GH₵ 1,820' },
+          { name: 'Fariha Akter', email: 'fariha@example.com', orders: '5', spend: 'GH₵ 420' },
+          { name: 'Rayhan Khan', email: 'rayhan@example.com', orders: '3', spend: 'GH₵ 290' },
         ],
       },
     },
@@ -268,7 +268,7 @@ export const ROLE_MOCK: Record<Role, RoleMock> = {
 
   events: {
     stats: [
-      { label: 'Event revenue (30d)', value: '$22,180', delta: '+18.6%', trend: 'up', icon: DollarSign },
+      { label: 'Event revenue (30d)', value: 'GH₵ 22,180', delta: '+18.6%', trend: 'up', icon: DollarSign },
       { label: 'Tickets sold', value: '1,284', delta: '+240', trend: 'up', icon: Ticket },
       { label: 'Active events', value: '6', delta: '+2', trend: 'up', icon: CalendarDays },
       { label: 'Attendees', value: '972', delta: '+8.5%', trend: 'up', icon: Users },
@@ -302,10 +302,10 @@ export const ROLE_MOCK: Record<Role, RoleMock> = {
           { key: 'remaining', label: 'Remaining', align: 'right' },
         ],
         rows: [
-          { event: 'Summer Beats 2026', tier: 'VIP', price: '$180', sold: '84', remaining: '16' },
-          { event: 'Summer Beats 2026', tier: 'General', price: '$65', sold: '612', remaining: '388' },
-          { event: 'Startup Pitch Night', tier: 'General', price: '$25', sold: '210', remaining: '90' },
-          { event: 'Street Food Fest', tier: 'Entry', price: '$10', sold: '500', remaining: '0' },
+          { event: 'Summer Beats 2026', tier: 'VIP', price: 'GH₵ 180', sold: '84', remaining: '16' },
+          { event: 'Summer Beats 2026', tier: 'General', price: 'GH₵ 65', sold: '612', remaining: '388' },
+          { event: 'Startup Pitch Night', tier: 'General', price: 'GH₵ 25', sold: '210', remaining: '90' },
+          { event: 'Street Food Fest', tier: 'Entry', price: 'GH₵ 10', sold: '500', remaining: '0' },
         ],
       },
       attendees: {

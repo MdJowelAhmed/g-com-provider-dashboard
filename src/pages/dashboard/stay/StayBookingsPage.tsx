@@ -130,7 +130,7 @@ export default function StayBookingsPage() {
         <SummaryTile label="Upcoming" value={totals.upcoming} tone="success" />
         <SummaryTile
           label="Revenue"
-          value={`$${totals.revenue.toFixed(0)}`}
+          value={`GH₵ ${totals.revenue.toFixed(0)}`}
           tone="success"
           compact
         />
@@ -254,11 +254,11 @@ export default function StayBookingsPage() {
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="font-semibold text-gray-100">
-                        ${b.totalAmount.toFixed(2)}
+                        GH₵ {b.totalAmount.toFixed(2)}
                       </div>
                       {b.paidAmount > 0 && b.paidAmount < b.totalAmount ? (
                         <div className="text-xs text-gray-500">
-                          paid ${b.paidAmount.toFixed(0)}
+                          paid GH₵ {b.paidAmount.toFixed(0)}
                         </div>
                       ) : null}
                     </td>

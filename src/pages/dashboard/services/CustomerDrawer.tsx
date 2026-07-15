@@ -156,7 +156,7 @@ export default function CustomerDrawer({ open, customer, onClose, onUpdate, onDe
         <StatTile label="Cancelled" value={customer.cancelledBookings} tone="danger" />
         <StatTile
           label="Total spent"
-          value={`$${customer.totalSpent.toFixed(0)}`}
+          value={`GH₵ ${customer.totalSpent.toFixed(0)}`}
           tone="brand"
         />
         <StatTile
@@ -215,7 +215,7 @@ export default function CustomerDrawer({ open, customer, onClose, onUpdate, onDe
                     </span>
                   </td>
                   <td className="px-3 py-2 text-right font-medium text-gray-100">
-                    ${rb.amount.toFixed(2)}
+                    GH₵ {rb.amount.toFixed(2)}
                   </td>
                 </tr>
               ))}
