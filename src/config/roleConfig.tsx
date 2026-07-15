@@ -7,7 +7,6 @@ import {
   CalendarDays,
   LayoutDashboard,
   ClipboardList,
-  Users,
   ShoppingBag,
   Ticket,
   BookOpen,

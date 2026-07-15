@@ -5,7 +5,6 @@ import {
   MapPin,
   Users,
   Layers,
-  CircleDollarSign,
 } from 'lucide-react'
 import { EVENT_STATUS_OPTIONS, type Event } from './eventTypes'
 

@@ -1,11 +1,8 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import {
   Area,
   AreaChart,
-  Cell,
-  Pie,
-  PieChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -13,17 +10,11 @@ import {
   CartesianGrid,
 } from 'recharts'
 import {
-  ArrowUpRight,
   ClipboardList,
   DollarSign,
   Loader2,
-  MessageSquare,
   Package,
   ShoppingBag,
-  Star,
-  TrendingDown,
-  TrendingUp,
-  Wallet,
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { useDashboardRole } from '../../auth/useDashboardRole'
@@ -31,44 +22,13 @@ import { ROLE_META } from '../../config/roleConfig'
 import { hasNavAccess, hasPermission } from '../../modules/permissions/resolver'
 import { navItemToPermissionId } from '../../modules/permissions/navPermissionMap'
 import { OVERVIEW_UI } from '../../config/overviewUiConfig'
-import { OVERVIEW_DATA } from '../../data/overviewData'
-import type { Role } from '../../types/role'
 import PageHeader from '../../components/dashboard/PageHeader'
 import StatCard from '../../components/dashboard/StatCard'
 import {
   useGetDashboardStatsQuery,
   useGetMonthlyRevenueQuery,
-  useGetPeriodSummaryQuery,
   useGetRecentOrdersQuery,
-  type RecentOrder,
 } from '../../redux/api/dashboardApi'
-
-type RangeKey = '7d' | '30d' | '90d'
-
-const RANGE_DAYS: Record<RangeKey, number> = {
-  '7d': 7,
-  '30d': 30,
-  '90d': 90,
-}
-
-const RANGE_LABEL: Record<RangeKey, string> = {
-  '7d': 'Last 7 days',
-  '30d': 'Last 30 days',
-  '90d': 'Last 90 days',
-}
-
-const STATUS_COLORS: Record<string, string> = {
-  completed: '#22c55e',
-  paid: '#22c55e',
-  confirmed: '#3b82f6',
-  payment_created: '#3b82f6',
-  pending: '#d9a441',
-  in_progress: '#d9a441',
-  cancelled: '#ef4444',
-  failed: '#ef4444',
-  refunded: '#9ca3af',
-}
-
 function formatMoney(n: number) {
   if (n >= 1_000_000) return `GH₵ ${(n / 1_000_000).toFixed(1)}M`
   if (n >= 10_000) return `GH₵ ${(n / 1000).toFixed(1)}K`
@@ -94,29 +54,10 @@ function statusLabel(status: string) {
   return status.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
-function statusColor(status: string) {
-  return STATUS_COLORS[status] ?? '#6b7280'
-}
-
-function buildStatusBreakdown(orders: RecentOrder[]) {
-  const counts = new Map<string, number>()
-  for (const order of orders) {
-    counts.set(order.status, (counts.get(order.status) ?? 0) + 1)
-  }
-  return [...counts.entries()].map(([status, value]) => ({
-    label: statusLabel(status),
-    status,
-    value,
-    color: statusColor(status),
-  }))
-}
-
 export default function Overview() {
   const { user } = useAuth()
   const dashboardRole = useDashboardRole()
-  const [range, setRange] = useState<RangeKey>('30d')
   const year = new Date().getFullYear()
-
   const {
     data: statsRes,
     isLoading: statsLoading,
@@ -128,25 +69,17 @@ export default function Overview() {
     isError: revenueError,
   } = useGetMonthlyRevenueQuery({ year }, { skip: !user })
   const {
-    data: periodRes,
-    isLoading: periodLoading,
-    isError: periodError,
-  } = useGetPeriodSummaryQuery({ range: RANGE_DAYS[range] }, { skip: !user })
-  const {
     data: recentRes,
     isLoading: recentLoading,
     isError: recentError,
   } = useGetRecentOrdersQuery(undefined, { skip: !user })
-
   const ui = OVERVIEW_UI[dashboardRole]
   const meta = ROLE_META[dashboardRole]
   const RoleIcon = meta.icon
 
   const stats = statsRes?.data
-  const period = periodRes?.data
   const monthlyRevenue = revenueRes?.data?.data ?? []
   const recentOrders = recentRes?.data ?? []
-
   const chartData = useMemo(
     () =>
       monthlyRevenue.map((point) => ({
@@ -156,24 +89,8 @@ export default function Overview() {
     [monthlyRevenue],
   )
 
-  const yearRevenue = useMemo(
-    () => monthlyRevenue.reduce((sum, point) => sum + point.revenue, 0),
-    [monthlyRevenue],
-  )
-
-  const statusBreakdown = useMemo(
-    () => buildStatusBreakdown(recentOrders),
-    [recentOrders],
-  )
-  const totalStatus = statusBreakdown.reduce((sum, slice) => sum + slice.value, 0)
-
-  const avgOrderValue = stats
-    ? stats.totalRevenueAmount / Math.max(stats.totalOrders, 1)
-    : 0
-
-  const isLoading = statsLoading || revenueLoading || periodLoading || recentLoading
-  const isError = statsError || revenueError || periodError || recentError
-
+  const isLoading = statsLoading || revenueLoading || recentLoading
+  const isError = statsError || revenueError || recentError
   const statCards = [
     {
       label: ui.primaryMetricLabel,
@@ -211,9 +128,7 @@ export default function Overview() {
       <PageHeader
         title={`Welcome, ${user.businessName || user.ownerName}`}
         description={ui.subtitle}
-        // actions={<RangeToggle value={range} onChange={setRange} />}
       />
-
       {!user.stripeConnected && (
         <div className="mb-6 flex items-start gap-3 rounded-xl border border-accent-amber/40 bg-accent-amber/10 p-4 text-sm">
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent-amber/20 text-accent-amber">
@@ -259,19 +174,7 @@ export default function Overview() {
                   <div className="text-sm font-semibold text-gray-100">{ui.chartTitle}</div>
                   <div className="text-xs text-gray-400">{year} monthly revenue</div>
                 </div>
-                {/* <div className="flex items-center gap-4 text-sm">
-                  <Metric label={ui.primaryMetricLabel} value={formatMoney(yearRevenue)} />
-                  <Metric
-                    label="Completed"
-                    value={formatNum(period?.completedOrders ?? 0)}
-                  />
-                  <Metric
-                    label={ui.tertiaryMetricLabel}
-                    value={formatMoney(avgOrderValue)}
-                  />
-                </div> */}
-              </div>
-              <div className="h-64">
+              </div>              <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart
                     data={chartData}
@@ -321,81 +224,10 @@ export default function Overview() {
                 </ResponsiveContainer>
               </div>
             </div>
-
-            {/* <div className="rounded-xl border border-surface-border bg-surface-card p-5">
-              <div className="mb-1 text-sm font-semibold text-gray-100">Status breakdown</div>
-              <div className="mb-3 text-xs text-gray-400">
-                {totalStatus} {ui.statusRecordsHint}
-              </div>
-              {statusBreakdown.length === 0 ? (
-                <div className="py-10 text-center text-sm text-gray-500">No recent orders</div>
-              ) : (
-                <div className="flex items-center gap-4">
-                  <div className="h-40 w-40 shrink-0">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={statusBreakdown}
-                          dataKey="value"
-                          nameKey="label"
-                          innerRadius={48}
-                          outerRadius={72}
-                          paddingAngle={2}
-                          stroke="none"
-                        >
-                          {statusBreakdown.map((slice) => (
-                            <Cell key={slice.status} fill={slice.color} />
-                          ))}
-                        </Pie>
-                        <Tooltip
-                          contentStyle={{
-                            background: '#19191b',
-                            border: '1px solid #2e2e34',
-                            borderRadius: 8,
-                            fontSize: 12,
-                          }}
-                          itemStyle={{ color: '#e5e7eb' }}
-                        />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                  <div className="flex-1 space-y-2 text-sm">
-                    {statusBreakdown.map((slice) => {
-                      const pct = totalStatus
-                        ? Math.round((slice.value / totalStatus) * 100)
-                        : 0
-                      return (
-                        <div
-                          key={slice.status}
-                          className="flex items-center justify-between gap-3"
-                        >
-                          <div className="flex items-center gap-2">
-                            <span
-                              className="inline-block h-2 w-2 rounded-full"
-                              style={{ background: slice.color }}
-                            />
-                            <span className="text-gray-300">{slice.label}</span>
-                          </div>
-                          <div className="text-xs text-gray-400">
-                            {slice.value} · {pct}%
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              )}
-            </div> */}
-            {/* <PayoutCard role={dashboardRole} /> */}
           </div>
 
           <div className="mt-6">
-            {/* <PeriodSummaryCard period={period} rangeLabel={RANGE_LABEL[range]} /> */}
-
-            
-
-            <div className="rounded-xl border border-surface-border bg-surface-card p-5">
-              <div className="mb-1 text-sm font-semibold text-gray-100">Recent orders</div>
+            <div className="rounded-xl border border-surface-border bg-surface-card p-5">              <div className="mb-1 text-sm font-semibold text-gray-100">Recent orders</div>
               <div className="mb-4 text-xs text-gray-400">Latest customer activity</div>
               {recentOrders.length === 0 ? (
                 <div className="py-10 text-center text-sm text-gray-500">No recent orders</div>
@@ -429,185 +261,6 @@ export default function Overview() {
           </div>
         </>
       )}
-    </div>
-  )
-}
-
-function PeriodSummaryCard({
-  period,
-  rangeLabel,
-}: {
-  period:
-    | {
-        completedOrders: number
-        totalProducts: number
-        newMessages: number
-        averageRating: number
-        totalReviews: number
-      }
-    | undefined
-  rangeLabel: string
-}) {
-  const items = [
-    {
-      label: 'Completed orders',
-      value: formatNum(period?.completedOrders ?? 0),
-      icon: ShoppingBag,
-    },
-    {
-      label: 'Products sold',
-      value: formatNum(period?.totalProducts ?? 0),
-      icon: Package,
-    },
-    {
-      label: 'New messages',
-      value: formatNum(period?.newMessages ?? 0),
-      icon: MessageSquare,
-    },
-    {
-      label: 'Avg. rating',
-      value:
-        period && period.totalReviews > 0
-          ? period.averageRating.toFixed(1)
-          : '—',
-      icon: Star,
-      hint:
-        period && period.totalReviews > 0
-          ? `${formatNum(period.totalReviews)} reviews`
-          : 'No reviews yet',
-    },
-  ]
-
-  return (
-    <div className="rounded-xl border border-surface-border bg-surface-card p-5">
-      <div className="mb-1 text-sm font-semibold text-gray-100">Period summary</div>
-      <div className="mb-4 text-xs text-gray-400">{rangeLabel}</div>
-      <ul className="space-y-3 text-sm">
-        {items.map((item) => {
-          const Icon = item.icon
-          return (
-            <li key={item.label} className="flex items-center gap-3">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-surface-elevated text-brand">
-                <Icon size={14} />
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="text-gray-300">{item.label}</div>
-                {'hint' in item && item.hint && (
-                  <div className="text-xs text-gray-500">{item.hint}</div>
-                )}
-              </div>
-              <div className="font-medium text-gray-100">{item.value}</div>
-            </li>
-          )
-        })}
-      </ul>
-    </div>
-  )
-}
-
-function RangeToggle({
-  value,
-  onChange,
-}: {
-  value: RangeKey
-  onChange: (v: RangeKey) => void
-}) {
-  return (
-    <div className="flex h-10 items-center rounded-md border border-surface-border bg-surface-card p-1">
-      {(['7d', '30d', '90d'] as RangeKey[]).map((r) => (
-        <button
-          key={r}
-          type="button"
-          onClick={() => onChange(r)}
-          className={`h-8 rounded px-3 text-xs font-medium transition ${
-            value === r
-              ? 'bg-surface-elevated text-gray-100'
-              : 'text-gray-400 hover:text-gray-200'
-          }`}
-        >
-          {r}
-        </button>
-      ))}
-    </div>
-  )
-}
-
-function Metric({
-  label,
-  value,
-  delta,
-}: {
-  label: string
-  value: string
-  delta?: number
-}) {
-  const up = (delta ?? 0) >= 0
-  return (
-    <div>
-      <div className="text-xs uppercase tracking-wide text-gray-500">{label}</div>
-      <div className="text-lg font-semibold text-gray-100">{value}</div>
-      {delta != null && (
-        <div
-          className={`flex items-center gap-1 text-xs ${up ? 'text-accent-success' : 'text-accent-danger'}`}
-        >
-          {up ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
-          {up ? '+' : ''}
-          {delta.toFixed(1)}%
-        </div>
-      )}
-    </div>
-  )
-}
-
-function PayoutCard({ role }: { role: Role }) {
-  const payout = OVERVIEW_DATA[role].payout
-  return (
-    <div className="rounded-xl border border-surface-border bg-surface-card p-5">
-      <div className="mb-1 flex items-center justify-between">
-        <div className="text-sm font-semibold text-gray-100">Payout snapshot</div>
-        <Wallet size={14} className="text-gray-500" />
-      </div>
-      <div className="mb-5 text-xs text-gray-400">Balance ready for withdrawal</div>
-
-      <div>
-        <div className="text-xs uppercase tracking-wide text-gray-500">Available</div>
-        <div className="text-3xl font-semibold text-accent-success">
-          {new Intl.NumberFormat(undefined, {
-            style: 'currency',
-            currency: 'GHS',
-          }).format(payout.available)}
-        </div>
-      </div>
-
-      <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-        <div className="rounded-lg border border-surface-border bg-surface-elevated px-3 py-2">
-          <div className="text-xs text-gray-500">Pending</div>
-          <div className="text-gray-100">{formatMoney(payout.pending)}</div>
-        </div>
-        <div className="rounded-lg border border-surface-border bg-surface-elevated px-3 py-2">
-          <div className="text-xs text-gray-500">Last payout</div>
-          <div className="text-gray-100">
-            {formatMoney(payout.lastPayout)}
-            <span className="ml-1 text-xs text-gray-500">
-              · {shortDate(payout.lastPayoutDate)}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {payout.nextAutoDate && (
-        <div className="mt-3 text-xs text-gray-400">
-          Next auto-payout on{' '}
-          <span className="text-gray-200">{shortDate(payout.nextAutoDate)}</span>
-        </div>
-      )}
-
-      <Link
-        to={`/dashboard/${role}/withdraw`}
-        className="mt-5 flex h-10 w-full items-center justify-center gap-1.5 rounded-md bg-brand text-sm font-medium text-white hover:bg-brand-hover"
-      >
-        <ArrowUpRight size={14} /> Withdraw funds
-      </Link>
     </div>
   )
 }

@@ -21,7 +21,6 @@ import {
   DELIVERY_METHOD,
   DELIVERY_METHOD_OPTIONS,
   type DeliveryMethodValue,
-  useBusinessInfoVerifyMutation,
   useBusinessInformationMutation,
   useBusinessRegisterMutation,
   useLazyGetMyProfileQuery,
@@ -39,12 +38,6 @@ const CATEGORY_OPTIONS = [
   { value: 'dine', label: 'Dine' },
   { value: 'shop', label: 'Shop' },
   { value: 'event', label: 'Events' },
-]
-
-const DOC_TYPE_OPTIONS = [
-  { value: 'passport', label: 'Passport' },
-  { value: 'national_id', label: 'National ID' },
-  { value: 'driving_license', label: 'Driving license' },
 ]
 
 const SOCIAL_META: Record<SocialKey, { label: string; placeholder: string; icon: IconType }> = {
@@ -118,19 +111,14 @@ export default function Register() {
   const [businessLogo, setBusinessLogo] = useState('')
   const [coverImage, setCoverImage] = useState('')
 
-  const [businessProof, setBusinessProof] = useState('')
-  const [verificationDocumentType, setVerificationDocumentType] = useState('passport')
-  const [verificationDocument, setVerificationDocument] = useState('')
-
   const [businessRegister, { isLoading: registering }] = useBusinessRegisterMutation()
   const [verifyEmail, { isLoading: verifyingEmail }] = useVerifyEmailMutation()
   const [resendOtp, { isLoading: resendingOtp }] = useResentOtpMutation()
   const [businessInformation, { isLoading: savingInfo }] = useBusinessInformationMutation()
-  const [businessInfoVerify, { isLoading: verifying }] = useBusinessInfoVerifyMutation()
   const [fetchProfile] = useLazyGetMyProfileQuery()
 
   const otp = useMemo(() => otpDigits.join(''), [otpDigits])
-  const busy = registering || verifyingEmail || resendingOtp || savingInfo || verifying
+  const busy = registering || verifyingEmail || resendingOtp || savingInfo
 
   useEffect(() => {
     if (step === 2) {
@@ -299,27 +287,6 @@ export default function Register() {
         longitude: lng,
         businessPhone: businessPhone.trim(),
       }).unwrap()
-      setStep(4)
-    } catch (err) {
-      setError(getAuthApiErrorMessage(err, 'Failed to save business information.'))
-    }
-  }
-
-  const submitVerification = async (e: FormEvent) => {
-    e.preventDefault()
-    setError(null)
-
-    if (!businessProof.trim() || !verificationDocument.trim()) {
-      setError('Please upload both business proof and verification document.')
-      return
-    }
-
-    try {
-      await businessInfoVerify({
-        businessProof: businessProof.trim(),
-        verificationDocumentType,
-        verificationDocument: verificationDocument.trim(),
-      }).unwrap()
 
       const profileResponse = await fetchProfile().unwrap()
       if (profileResponse.success && profileResponse.data) {
@@ -331,7 +298,7 @@ export default function Register() {
 
       navigate('/login', { replace: true })
     } catch (err) {
-      setError(getAuthApiErrorMessage(err, 'Verification failed. Please try again.'))
+      setError(getAuthApiErrorMessage(err, 'Failed to save business information.'))
     }
   }
 
@@ -447,231 +414,174 @@ export default function Register() {
     )
   }
 
-  if (step === 3) {
-    const ActiveSocialIcon = SOCIAL_META[activeSocial].icon
-
-    return (
-      <AuthLayout>
-        <AuthCard title="Business Information" bordered>
-          <form onSubmit={submitBusinessInfo} className="space-y-4">
-            <FormField
-              label="Business Name"
-              value={businessName}
-              onChange={(e) => setBusinessName(e.target.value)}
-              placeholder="Enter your Business name"
-              required
-              disabled={busy}
-            />
-
-            <FormSelect
-              label="Category"
-              optionItems={CATEGORY_OPTIONS}
-              placeholderOption="Select a category"
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              required
-              disabled={busy}
-            />
-
-            <FormTextarea
-              label="Description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Describe your business"
-              disabled={busy}
-            />
-
-            <div>
-              <span className="block text-sm font-medium text-white">Social Media Links</span>
-              <div className="mt-2 flex gap-2">
-                {(Object.keys(SOCIAL_META) as SocialKey[]).map((key) => {
-                  const Icon = SOCIAL_META[key].icon
-                  const active = activeSocial === key
-                  return (
-                    <button
-                      key={key}
-                      type="button"
-                      onClick={() => setActiveSocial(key)}
-                      className={`flex h-10 w-10 items-center justify-center rounded-lg border transition ${
-                        active
-                          ? 'border-white bg-white text-gray-900'
-                          : 'border-surface-border bg-surface-elevated text-gray-300 hover:border-brand/40'
-                      }`}
-                      title={SOCIAL_META[key].label}
-                    >
-                      <Icon size={18} />
-                    </button>
-                  )
-                })}
-              </div>
-              <div className="relative mt-2">
-                <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-gray-500">
-                  <ActiveSocialIcon size={16} />
-                </div>
-                <input
-                  type="url"
-                  value={socialLinks[activeSocial]}
-                  onChange={(e) =>
-                    setSocialLinks((prev) => ({ ...prev, [activeSocial]: e.target.value }))
-                  }
-                  placeholder={SOCIAL_META[activeSocial].placeholder}
-                  disabled={busy}
-                  className="h-11 w-full rounded-md bg-white py-2 pl-10 pr-3 text-gray-900 placeholder:text-gray-400 outline-none focus:ring-2 focus:ring-brand-ring"
-                />
-              </div>
-            </div>
-
-            <FormField
-              label="Phone Number"
-              type="tel"
-              value={businessPhone}
-              onChange={(e) => setBusinessPhone(e.target.value)}
-              placeholder="Enter Business Phone Number"
-              required
-              disabled={busy}
-            />
-
-            <div>
-              <span className="block text-sm font-medium text-white">
-                Delivery methods<span className="ml-1 text-accent-amber">*</span>
-              </span>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {DELIVERY_METHOD_OPTIONS.map((option) => {
-                  const active = deliveryMethods.includes(option.value)
-                  return (
-                    <button
-                      key={option.value}
-                      type="button"
-                      disabled={busy}
-                      onClick={() =>
-                        setDeliveryMethods((prev) =>
-                          active
-                            ? prev.filter((v) => v !== option.value)
-                            : [...prev, option.value],
-                        )
-                      }
-                      className={`rounded-lg border px-3 py-2 text-xs font-medium transition ${
-                        active
-                          ? 'border-brand bg-brand/15 text-white ring-1 ring-brand/40'
-                          : 'border-surface-border text-gray-400 hover:border-brand/40 hover:text-gray-100'
-                      }`}
-                    >
-                      {option.label}
-                    </button>
-                  )
-                })}
-              </div>
-              <p className="mt-1.5 text-xs text-gray-500">Select at least one option.</p>
-            </div>
-
-            <FormField
-              label="Address"
-              value={businessAddress}
-              onChange={(e) => setBusinessAddress(e.target.value)}
-              placeholder="Enter business address"
-              disabled={busy}
-            />
-
-            <div>
-              <span className="block text-sm font-medium text-white">Location</span>
-              <div className="mt-2">
-                <GoogleMapLocationPicker
-                  ref={locationPickerRef}
-                  value={{
-                    locationName: businessLocation,
-                    latitude,
-                    longitude,
-                  }}
-                  onChange={(value) => {
-                    setBusinessLocation(value.locationName)
-                    setLatitude(value.latitude)
-                    setLongitude(value.longitude)
-                  }}
-                  disabled={busy}
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-[120px_1fr] gap-3">
-              <ImageUploader
-                label="Upload Logo"
-                value={businessLogo}
-                onChange={setBusinessLogo}
-                autoUpload
-                heightClass="h-[120px]"
-                disabled={busy}
-              />
-              <ImageUploader
-                label="Upload Cover Photo"
-                value={coverImage}
-                onChange={setCoverImage}
-                autoUpload
-                heightClass="h-[120px]"
-                disabled={busy}
-              />
-            </div>
-
-            {error ? <p className="text-xs text-accent-danger">{error}</p> : null}
-
-            <PrimaryButton type="submit" disabled={busy}>
-              {savingInfo ? 'Saving…' : 'Continue'}
-            </PrimaryButton>
-          </form>
-        </AuthCard>
-      </AuthLayout>
-    )
-  }
+  const ActiveSocialIcon = SOCIAL_META[activeSocial].icon
 
   return (
     <AuthLayout>
-      <AuthCard title="Verification" bordered>
-        <form onSubmit={submitVerification} className="space-y-4">
-          <p className="text-sm text-gray-400">
-            Upload your business proof and a government ID to verify your account.
-          </p>
+      <AuthCard title="Business Information" bordered>
+        <form onSubmit={submitBusinessInfo} className="space-y-4">
+          <FormField
+            label="Business Name"
+            value={businessName}
+            onChange={(e) => setBusinessName(e.target.value)}
+            placeholder="Enter your Business name"
+            required
+            disabled={busy}
+          />
 
           <FormSelect
-            label="Document type"
-            optionItems={DOC_TYPE_OPTIONS}
-            value={verificationDocumentType}
-            onChange={(e) => setVerificationDocumentType(e.target.value)}
+            label="Category"
+            optionItems={CATEGORY_OPTIONS}
+            placeholderOption="Select a category"
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+            required
             disabled={busy}
           />
 
-          <ImageUploader
-            label="Business proof"
-            value={businessProof}
-            onChange={setBusinessProof}
-            autoUpload
-            heightClass="h-36"
+          <FormTextarea
+            label="Description"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Describe your business"
             disabled={busy}
-            hint="Business registration or proof of ownership"
           />
 
-          <ImageUploader
-            label="Verification document"
-            value={verificationDocument}
-            onChange={setVerificationDocument}
-            autoUpload
-            heightClass="h-36"
+          <div>
+            <span className="block text-sm font-medium text-white">Social Media Links</span>
+            <div className="mt-2 flex gap-2">
+              {(Object.keys(SOCIAL_META) as SocialKey[]).map((key) => {
+                const Icon = SOCIAL_META[key].icon
+                const active = activeSocial === key
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setActiveSocial(key)}
+                    className={`flex h-10 w-10 items-center justify-center rounded-lg border transition ${
+                      active
+                        ? 'border-white bg-white text-gray-900'
+                        : 'border-surface-border bg-surface-elevated text-gray-300 hover:border-brand/40'
+                    }`}
+                    title={SOCIAL_META[key].label}
+                  >
+                    <Icon size={18} />
+                  </button>
+                )
+              })}
+            </div>
+            <div className="relative mt-2">
+              <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-gray-500">
+                <ActiveSocialIcon size={16} />
+              </div>
+              <input
+                type="url"
+                value={socialLinks[activeSocial]}
+                onChange={(e) =>
+                  setSocialLinks((prev) => ({ ...prev, [activeSocial]: e.target.value }))
+                }
+                placeholder={SOCIAL_META[activeSocial].placeholder}
+                disabled={busy}
+                className="h-11 w-full rounded-md bg-white py-2 pl-10 pr-3 text-gray-900 placeholder:text-gray-400 outline-none focus:ring-2 focus:ring-brand-ring"
+              />
+            </div>
+          </div>
+
+          <FormField
+            label="Phone Number"
+            type="tel"
+            value={businessPhone}
+            onChange={(e) => setBusinessPhone(e.target.value)}
+            placeholder="Enter Business Phone Number"
+            required
             disabled={busy}
-            hint="Passport, national ID, or driving license"
           />
+
+          <div>
+            <span className="block text-sm font-medium text-white">
+              Delivery methods<span className="ml-1 text-accent-amber">*</span>
+            </span>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {DELIVERY_METHOD_OPTIONS.map((option) => {
+                const active = deliveryMethods.includes(option.value)
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    disabled={busy}
+                    onClick={() =>
+                      setDeliveryMethods((prev) =>
+                        active
+                          ? prev.filter((v) => v !== option.value)
+                          : [...prev, option.value],
+                      )
+                    }
+                    className={`rounded-lg border px-3 py-2 text-xs font-medium transition ${
+                      active
+                        ? 'border-brand bg-brand/15 text-white ring-1 ring-brand/40'
+                        : 'border-surface-border text-gray-400 hover:border-brand/40 hover:text-gray-100'
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                )
+              })}
+            </div>
+            <p className="mt-1.5 text-xs text-gray-500">Select at least one option.</p>
+          </div>
+
+          <FormField
+            label="Address"
+            value={businessAddress}
+            onChange={(e) => setBusinessAddress(e.target.value)}
+            placeholder="Enter business address"
+            disabled={busy}
+          />
+
+          <div>
+            <span className="block text-sm font-medium text-white">Location</span>
+            <div className="mt-2">
+              <GoogleMapLocationPicker
+                ref={locationPickerRef}
+                value={{
+                  locationName: businessLocation,
+                  latitude,
+                  longitude,
+                }}
+                onChange={(value) => {
+                  setBusinessLocation(value.locationName)
+                  setLatitude(value.latitude)
+                  setLongitude(value.longitude)
+                }}
+                disabled={busy}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-[120px_1fr] gap-3">
+            <ImageUploader
+              label="Upload Logo"
+              value={businessLogo}
+              onChange={setBusinessLogo}
+              autoUpload
+              heightClass="h-[120px]"
+              disabled={busy}
+            />
+            <ImageUploader
+              label="Upload Cover Photo"
+              value={coverImage}
+              onChange={setCoverImage}
+              autoUpload
+              heightClass="h-[120px]"
+              disabled={busy}
+            />
+          </div>
 
           {error ? <p className="text-xs text-accent-danger">{error}</p> : null}
 
           <PrimaryButton type="submit" disabled={busy}>
-            {verifying ? 'Submitting…' : 'Complete registration'}
+            {savingInfo ? 'Saving…' : 'Complete registration'}
           </PrimaryButton>
-
-          <button
-            type="button"
-            onClick={() => navigate('/login', { replace: true })}
-            className="h-11 w-full rounded-md text-sm font-medium text-gray-400 hover:text-white"
-            disabled={busy}
-          >
-            Skip for now — log in later
-          </button>
         </form>
       </AuthCard>
     </AuthLayout>

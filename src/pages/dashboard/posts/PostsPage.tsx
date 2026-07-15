@@ -1,4 +1,4 @@
-import { FileText, Plus } from 'lucide-react'
+import {  Plus } from 'lucide-react'
 import { useCallback, useRef } from 'react'
 import { useAuth } from '../../../context/AuthContext'
 import { useDashboardRole } from '../../../auth/useDashboardRole'

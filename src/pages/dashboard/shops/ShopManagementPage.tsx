@@ -85,11 +85,7 @@ export default function ShopManagementPage() {
 
   const detailsShop = shops.find((s) => s.id === detailsId) ?? null
 
-  const totals = useMemo(() => {
-    const withHours = shops.filter((s) => s.openTime && s.closeTime).length
-    const withDays = shops.filter((s) => s.availableDay.length > 0).length
-    return { total: shops.length, withHours, withDays }
-  }, [shops])
+ 
 
   const handleSubmit = async (values: ShopFormValues) => {
     const payload = toShopPayload(values)
@@ -137,22 +133,9 @@ export default function ShopManagementPage() {
       <PageHeader
         title="Shop Management"
         description="Manage your business branches — locations, contact details, and opening hours."
-        // actions={
-        //   <button
-        //     type="button"
-        //     onClick={() => setModal({ mode: 'add' })}
-        //     className="flex h-10 items-center gap-1.5 rounded-md bg-brand px-4 text-sm font-medium text-white hover:bg-brand-hover"
-        //   >
-        //     <Plus size={16} /> Add branch
-        //   </button>
-        // }
+       
       />
-{/* 
-      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <SummaryTile label="Total branches" value={totals.total} tone="neutral" />
-        <SummaryTile label="With hours set" value={totals.withHours} tone="success" />
-        <SummaryTile label="With open days" value={totals.withDays} tone="warning" />
-      </div> */}
+
 
         <div className="mb-4 flex items-center justify-end w-full gap-2">
         <div className="relative min-w-[220px] flex-1">
@@ -337,26 +320,3 @@ function IconButton({
   )
 }
 
-function SummaryTile({
-  label,
-  value,
-  tone,
-}: {
-  label: string
-  value: number
-  tone: 'neutral' | 'success' | 'warning' | 'danger' | 'muted'
-}) {
-  const toneClass: Record<typeof tone, string> = {
-    neutral: 'text-gray-100',
-    success: 'text-accent-success',
-    warning: 'text-accent-amber',
-    danger: 'text-accent-danger',
-    muted: 'text-gray-400',
-  }
-  return (
-    <div className="rounded-xl border border-surface-border bg-surface-card px-4 py-3">
-      <div className="text-xs uppercase tracking-wide text-gray-500">{label}</div>
-      <div className={`mt-1 text-xl font-semibold ${toneClass[tone]}`}>{value}</div>
-    </div>
-  )
-}

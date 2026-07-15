@@ -1,4 +1,4 @@
-import { Bell, Search } from 'lucide-react'
+import { Bell } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import type { User } from '../../context/AuthContext'
 import { useGetNotificationsQuery } from '../../redux/api/notificationApi'
