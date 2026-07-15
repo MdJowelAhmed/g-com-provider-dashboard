@@ -1,62 +1,106 @@
-import { motion, AnimatePresence } from 'framer-motion'
-import { FileText, Trash2, Upload } from 'lucide-react'
-import { useCallback, useRef, useState } from 'react'
-import type { User } from '../../../../context/AuthContext'
+import { message } from 'antd'
+import { motion } from 'framer-motion'
+import { useState } from 'react'
+import type { FetchBaseQueryError } from '@reduxjs/toolkit/query'
+import ImageUploader from '../../../../components/common/ImageUploader'
+import {
+  supportInputClass,
+  supportLabelClass,
+} from '../../../../components/dashboard/support/supportFieldClasses'
+import {
+  useGetMyProfileQuery,
+  useVerificationDocumentMutation,
+} from '../../../../redux/api/authApi'
+import {
+  uploadPrivateImageFile,
+  usePrivateUploadImageMutation,
+  type ImageUploadPayload,
+  type ImageUploadResponse,
+} from '../../../../redux/api/imageUploadApi'
 import SettingsCard from '../SettingsCard'
 import SettingsPrimaryButton from '../SettingsPrimaryButton'
 
-type DocRow = { id: string; name: string; size: number }
-
 type Props = {
-  user: User
-  updateUser: (p: Partial<User>) => void
   onDirty: () => void
   onSaved: () => void
 }
 
-export default function DocumentsPanel({ user, updateUser, onDirty, onSaved }: Props) {
-  const [docs, setDocs] = useState<DocRow[]>([])
-  const inputRef = useRef<HTMLInputElement>(null)
-  const [drag, setDrag] = useState(false)
+const DOC_TYPE_OPTIONS = [
+  { value: 'passport', label: 'Passport' },
+  { value: 'national_id', label: 'National ID' },
+  { value: 'driving_license', label: 'Driving license' },
+]
 
-  const addFiles = useCallback(
-    (files: FileList | null) => {
-      if (!files?.length) return
-      const next: DocRow[] = []
-      for (const f of Array.from(files)) {
-        next.push({
-          id: `doc_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-          name: f.name,
-          size: f.size,
-        })
+function getApiErrorMessage(error: unknown, fallback: string) {
+  if (error && typeof error === 'object' && 'data' in error) {
+    const data = (error as FetchBaseQueryError).data
+    if (data && typeof data === 'object') {
+      const payload = data as { message?: unknown; errorMessages?: { message?: string }[] }
+      if (typeof payload.message === 'string' && payload.message.trim()) {
+        return payload.message
       }
-      setDocs((d) => [...d, ...next])
-      onDirty()
-    },
-    [onDirty],
-  )
+      const first = payload.errorMessages?.[0]?.message
+      if (first?.trim()) return first
+    }
+  }
+  return fallback
+}
 
+export default function DocumentsPanel({ onDirty, onSaved }: Props) {
+  const [verificationDocumentType, setVerificationDocumentType] = useState('passport')
+  const [businessProofFile, setBusinessProofFile] = useState<File | null>(null)
+  const [verificationDocFile, setVerificationDocFile] = useState<File | null>(null)
+  const [uploaderKey, setUploaderKey] = useState(0)
   const [saving, setSaving] = useState(false)
   const [ok, setOk] = useState(false)
 
-  const save = () => {
+  const { data: profileResponse } = useGetMyProfileQuery()
+  const isBusinessVerified = Boolean(profileResponse?.data?.business?.isBusinessVerified)
+
+  const [getPrivatePresignedUrl] = usePrivateUploadImageMutation()
+  const [submitVerification] = useVerificationDocumentMutation()
+
+  const formLocked = saving || isBusinessVerified
+
+  const save = async () => {
+    if (isBusinessVerified) return
+
+    if (!verificationDocFile) {
+      message.error('Please select a verification document.')
+      return
+    }
+
     setSaving(true)
-    window.setTimeout(() => {
-      updateUser({
-        extra: {
-          ...user.extra,
-          verification_doc_count: String(docs.length),
-          verification_docs_updated: new Date().toISOString(),
-        },
-      })
-      setSaving(false)
+    try {
+      const getUrl = (payload: ImageUploadPayload): Promise<ImageUploadResponse> =>
+        getPrivatePresignedUrl(payload).unwrap()
+
+      let businessProofKey: string | undefined
+      if (businessProofFile) {
+        businessProofKey = await uploadPrivateImageFile(businessProofFile, getUrl)
+      }
+
+      const verificationDocumentKey = await uploadPrivateImageFile(verificationDocFile, getUrl)
+
+      await submitVerification({
+        ...(businessProofKey ? { businessProof: businessProofKey } : {}),
+        verificationDocumentType,
+        verificationDocument: verificationDocumentKey,
+      }).unwrap()
+
+      setBusinessProofFile(null)
+      setVerificationDocFile(null)
+      setUploaderKey((k) => k + 1)
       onSaved()
       setOk(true)
+      message.success('Verification documents submitted.')
       window.setTimeout(() => setOk(false), 2600)
-    }, 500)
+    } catch (error) {
+      message.error(getApiErrorMessage(error, 'Failed to submit documents.'))
+    } finally {
+      setSaving(false)
+    }
   }
-
-  const fmt = (n: number) => (n < 1024 ? `${n} B` : `${(n / 1024).toFixed(1)} KB`)
 
   return (
     <motion.div
@@ -65,97 +109,83 @@ export default function DocumentsPanel({ user, updateUser, onDirty, onSaved }: P
       transition={{ duration: 0.28 }}
       className="space-y-6"
     >
-      {ok ? (
+      {isBusinessVerified ? (
         <p className="rounded-xl border border-accent-success/30 bg-accent-success/10 px-4 py-2 text-sm text-accent-success">
-          Document list saved. Wire uploads to your storage API for production.
+          Your business is already verified. Document submission is locked.
+        </p>
+      ) : ok ? (
+        <p className="rounded-xl border border-accent-success/30 bg-accent-success/10 px-4 py-2 text-sm text-accent-success">
+          Verification request submitted. Our team will review your documents.
         </p>
       ) : null}
 
       <SettingsCard
         title="Verification documents"
-        description="Business registration, tax IDs, or other files our team may request."
-        footer={<SettingsPrimaryButton onClick={save} loading={saving}>Save</SettingsPrimaryButton>}
+        description={
+          isBusinessVerified
+            ? 'This business account has already been verified.'
+            : 'Select documents first, then click Submit — files upload privately only on submit.'
+        }
+        footer={
+          <SettingsPrimaryButton onClick={save} loading={saving} disabled={formLocked} >
+            {isBusinessVerified ? 'Already verified' : 'Submit for verification'}
+          </SettingsPrimaryButton>
+        }
       >
-        <div
-          onDragEnter={(e) => {
-            e.preventDefault()
-            setDrag(true)
-          }}
-          onDragLeave={(e) => {
-            e.preventDefault()
-            setDrag(false)
-          }}
-          onDragOver={(e) => e.preventDefault()}
-          onDrop={(e) => {
-            e.preventDefault()
-            setDrag(false)
-            addFiles(e.dataTransfer.files)
-          }}
-          className={`rounded-xl border-2 border-dashed px-4 py-8 text-center transition ${
-            drag ? 'border-brand/60 bg-brand/10' : 'border-white/[0.1] bg-surface-elevated/35'
-          }`}
-        >
-          <input
-            ref={inputRef}
-            type="file"
-            multiple
-            className="hidden"
-            accept=".pdf,.png,.jpg,.jpeg"
-            onChange={(e) => addFiles(e.target.files)}
-          />
-          <Upload className="mx-auto text-brand" size={26} />
-          <p className="mt-2 text-sm text-gray-300">Drag files here or</p>
-          <button
-            type="button"
-            onClick={() => inputRef.current?.click()}
-            className="mt-2 text-sm font-medium text-brand hover:underline"
-          >
-            browse
-          </button>
-          <p className="mt-2 text-[11px] text-gray-600">PDF, JPEG, PNG · max 10 MB each (client-side)</p>
-        </div>
-
-        <AnimatePresence initial={false}>
-          {docs.length > 0 ? (
-            <motion.ul
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              className="divide-y divide-white/[0.06] overflow-hidden rounded-xl border border-white/[0.07] bg-surface-elevated/40"
+        <div className="space-y-5">
+          <div>
+            <label className={supportLabelClass} htmlFor="doc-type">
+              Document type
+            </label>
+            <select
+              id="doc-type"
+              value={verificationDocumentType}
+              onChange={(e) => {
+                setVerificationDocumentType(e.target.value)
+                onDirty()
+              }}
+              disabled={formLocked}
+              className={supportInputClass}
             >
-              {docs.map((d) => (
-                <motion.li
-                  key={d.id}
-                  layout
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="flex items-center justify-between gap-3 px-4 py-3"
-                >
-                  <div className="flex min-w-0 items-center gap-3">
-                    <FileText size={18} className="shrink-0 text-gray-500" />
-                    <div className="min-w-0">
-                      <div className="truncate text-sm text-gray-200">{d.name}</div>
-                      <div className="text-[11px] text-gray-600">{fmt(d.size)}</div>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDocs((list) => list.filter((x) => x.id !== d.id))
-                      onDirty()
-                    }}
-                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-gray-500 hover:bg-accent-danger/15 hover:text-accent-danger"
-                    aria-label="Remove"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </motion.li>
+              {DOC_TYPE_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
               ))}
-            </motion.ul>
-          ) : (
-            <p className="py-6 text-center text-sm text-gray-600">No documents added yet.</p>
-          )}
-        </AnimatePresence>
+            </select>
+          </div>
+
+          <div className="flex gap-6">
+            <ImageUploader
+              key={`business-proof-${uploaderKey}`}
+              label="Business proof"
+              onFileSelect={(file) => {
+                setBusinessProofFile(file)
+                onDirty()
+              }}
+              autoUpload={false}
+              heightClass="h-48"
+              disabled={formLocked}
+              accept="image/*,.pdf"
+              hint="Optional — selected now, uploaded on submit"
+            />
+
+            <ImageUploader
+              key={`verification-doc-${uploaderKey}`}
+              label="Verification document"
+              onFileSelect={(file) => {
+                setVerificationDocFile(file)
+                onDirty()
+              }}
+              autoUpload={false}
+              required
+              heightClass="h-48"
+              disabled={formLocked}
+              accept="image/*,.pdf"
+              hint="Required — selected now, uploaded on submit"
+            />
+          </div>
+        </div>
       </SettingsCard>
     </motion.div>
   )

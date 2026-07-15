@@ -8,14 +8,19 @@ import {
   import { ImagePlus, Loader2, Video } from 'lucide-react'
   import {
     uploadImageFile,
+    uploadPrivateImageFile,
     useGetPresignedUploadUrlMutation,
+    usePrivateUploadImageMutation,
   } from '../../redux/api/imageUploadApi'
   
   type ImageUploaderProps = {
     value?: string
-    onChange?: (publicUrl: string) => void
+    /** Public URL (default) or private storage key when `privateUpload` is true. */
+    onChange?: (value: string) => void
     onFileSelect?: (file: File | null) => void
     autoUpload?: boolean
+    /** Use private R2 upload; `onChange` receives the storage `key`, not a public URL. */
+    privateUpload?: boolean
     label?: string
     required?: boolean
     disabled?: boolean
@@ -31,6 +36,7 @@ import {
     onChange,
     onFileSelect,
     autoUpload = false,
+    privateUpload = false,
     label,
     required = false,
     disabled = false,
@@ -45,6 +51,7 @@ import {
     const [previewType, setPreviewType] = useState<'image' | 'video' | null>(null)
     const [isUploading, setIsUploading] = useState(false)
     const [getPresignedUrl] = useGetPresignedUploadUrlMutation()
+    const [getPrivatePresignedUrl] = usePrivateUploadImageMutation()
 
     const inferPreviewType = (url: string): 'image' | 'video' | null => {
       if (!url) return null
@@ -55,9 +62,25 @@ import {
     }
   
     useEffect(() => {
+      if (privateUpload) {
+        if (!value) {
+          setPreviewUrl((prev) => {
+            if (prev.startsWith('blob:')) URL.revokeObjectURL(prev)
+            return ''
+          })
+          setPreviewType(null)
+          return
+        }
+        // Storage keys are not viewable URLs — keep local blob preview after upload.
+        if (value.startsWith('http://') || value.startsWith('https://') || value.startsWith('blob:')) {
+          setPreviewUrl(value)
+          setPreviewType(inferPreviewType(value))
+        }
+        return
+      }
       setPreviewUrl(value)
       setPreviewType(inferPreviewType(value))
-    }, [value])
+    }, [value, privateUpload])
   
     useEffect(() => {
       return () => {
@@ -97,9 +120,18 @@ import {
   
       const fileIsImage = file.type.startsWith('image/')
       const fileIsVideo = file.type.startsWith('video/')
+      const fileIsPdf =
+        file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
       const canUseVideo = allowVideo || accept.includes('video/')
-      if (!fileIsImage && !(canUseVideo && fileIsVideo)) {
-        message.warning(canUseVideo ? 'Please select an image or video file.' : 'Please select an image file.')
+      const canUsePdf = accept.includes('pdf') || accept.includes('application/pdf')
+      if (!fileIsImage && !(canUseVideo && fileIsVideo) && !(canUsePdf && fileIsPdf)) {
+        message.warning(
+          canUsePdf
+            ? 'Please select an image or PDF file.'
+            : canUseVideo
+              ? 'Please select an image or video file.'
+              : 'Please select an image file.',
+        )
         return
       }
   
@@ -113,27 +145,55 @@ import {
       setIsUploading(true)
   
       try {
-        const publicUrl = await uploadImageFile(file, async (payload) => {
-          const result = await getPresignedUrl(payload).unwrap()
-          return result
-        })
+        const result = privateUpload
+          ? await uploadPrivateImageFile(file, async (payload) => {
+              const res = await getPrivatePresignedUrl(payload).unwrap()
+              return res
+            })
+          : await uploadImageFile(file, async (payload) => {
+              const res = await getPresignedUrl(payload).unwrap()
+              return res
+            })
   
-        setPreviewUrl((prev) => {
-          if (prev.startsWith('blob:')) {
-            URL.revokeObjectURL(prev)
-          }
-          return publicUrl
-        })
+        // Public uploads preview via CDN URL; private uploads keep local blob preview
+        // since the API only returns a storage key (not a viewable URL).
+        if (!privateUpload) {
+          setPreviewUrl((prev) => {
+            if (prev.startsWith('blob:')) {
+              URL.revokeObjectURL(prev)
+            }
+            return result
+          })
+        } else if (fileIsPdf) {
+          // PDF has no image preview — clear blob and show empty dropzone with key below.
+          setPreviewUrl((prev) => {
+            if (prev.startsWith('blob:')) URL.revokeObjectURL(prev)
+            return ''
+          })
+          setPreviewType(null)
+        }
   
-        onChange?.(publicUrl)
+        onChange?.(result)
         onFileSelect?.(null)
-        message.success(fileIsVideo ? 'Video uploaded successfully.' : 'Image uploaded successfully.')
+        message.success(
+          fileIsPdf
+            ? 'Document uploaded successfully.'
+            : fileIsVideo
+              ? 'Video uploaded successfully.'
+              : 'Image uploaded successfully.',
+        )
       } catch (error) {
         resetPreview()
         onFileSelect?.(null)
   
         const errorMessage =
-          error instanceof Error ? error.message : fileIsVideo ? 'Video upload failed.' : 'Image upload failed.'
+          error instanceof Error
+            ? error.message
+            : fileIsPdf
+              ? 'Document upload failed.'
+              : fileIsVideo
+                ? 'Video upload failed.'
+                : 'Image upload failed.'
         message.error(errorMessage)
       } finally {
         setIsUploading(false)

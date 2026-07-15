@@ -200,6 +200,20 @@ export interface BusinessInfoVerifyResponse {
     data?: BusinessProfile;
 }
 
+export interface VerificationDocumentPayload {
+    /** Private storage key, e.g. `image/user-….jpg` */
+    businessProof?: string;
+    verificationDocumentType: string;
+    /** Private storage key, e.g. `image/user-….jpg` */
+    verificationDocument: string;
+}
+
+export interface VerificationDocumentResponse {
+    success: boolean;
+    message: string;
+    data?: BusinessProfile;
+}
+
 const authApi = baseApi.injectEndpoints({
     endpoints: (builder) => ({
         login: builder.mutation<LoginResponse, LoginCredentials>({
@@ -403,10 +417,18 @@ const authApi = baseApi.injectEndpoints({
             }),
             invalidatesTags: ['Auth'],
         }),
-
-
+        verificationDocument: builder.mutation<
+            VerificationDocumentResponse,
+            VerificationDocumentPayload
+        >({
+            query: (body) => ({
+                url: '/business-verifications/request',
+                method: 'POST',
+                body,
+            }),
+            invalidatesTags: ['Auth'],
+        }),
     }),
-
 })
 
 export const {
@@ -425,5 +447,6 @@ export const {
     useBusinessRegisterMutation,
     useBusinessInformationMutation,
     useBusinessInfoVerifyMutation,
+    useVerificationDocumentMutation,
 } =
     authApi
