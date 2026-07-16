@@ -9,13 +9,14 @@ import {
   Col,
   Divider,
   Button,
-  Space,
   message,
 } from 'antd'
 import ImageUploader from '../../../components/common/ImageUploader'
 import GoogleMapLocationPicker, {
   type GoogleMapLocationPickerRef,
 } from '../../../components/common/GoogleMapLocationPicker'
+import { useDashboardRole } from '../../../auth/useDashboardRole'
+import { useAuth } from '../../../context/AuthContext'
 import { parseCoordinate } from '../../../lib/googleMaps'
 import { useGetBusinessCategoriesQuery } from '../../../redux/api/businessCategoryApi'
 import { useGetShopsQuery } from '../../../redux/api/shopManagementApi'
@@ -24,6 +25,12 @@ import {
   uploadImageFile,
   useGetPresignedUploadUrlMutation,
 } from '../../../redux/api/imageUploadApi'
+import {
+  PLATFORM_CATEGORY_OPTIONS,
+  businessCategoryToPlatformCategory,
+  dashboardRoleToPlatformCategory,
+  type PlatformCategory,
+} from '../services/serviceTypes'
 import type { Event, EventFormValues } from './eventTypes'
 import { eventToFormValues } from './eventMapping'
 
@@ -36,7 +43,17 @@ type Props = {
   onSubmit: (values: EventFormValues) => void | Promise<void>
 }
 
-const blankValues: EventFormValues = {
+function defaultCategory(
+  dashboardRole: string,
+  profileCategory?: string,
+): PlatformCategory {
+  if (profileCategory?.trim()) {
+    return businessCategoryToPlatformCategory(profileCategory)
+  }
+  return dashboardRoleToPlatformCategory(dashboardRole)
+}
+
+const blankValues = (category: PlatformCategory): EventFormValues => ({
   name: '',
   description: '',
   startTime: '',
@@ -48,11 +65,12 @@ const blankValues: EventFormValues = {
   maxCapacity: 100,
   ticketPrice: 0,
   image: '',
+  category,
   subCategory: '',
   businessCategory: '',
   organizerName: '',
   branch: '',
-}
+})
 
 function toDatetimeLocal(iso: string): string {
   if (!iso) return ''
@@ -91,11 +109,15 @@ export default function EventFormDrawer({
   onSubmit,
 }: Props) {
   const [form] = Form.useForm<EventFormValues>()
+  const { user } = useAuth()
+  const dashboardRole = useDashboardRole()
   const locationPickerRef = useRef<GoogleMapLocationPickerRef>(null)
   const [pendingImageFile, setPendingImageFile] = useState<File | null>(null)
   const [isUploadingImage, setIsUploadingImage] = useState(false)
   const [getPresignedUrl] = useGetPresignedUploadUrlMutation()
   const minDatetime = useMemo(() => nowDatetimeLocal(), [open])
+
+  const category = Form.useWatch('category', form) as PlatformCategory | '' | undefined
 
   const startMin = useMemo(() => {
     if (mode === 'edit' && initial?.startTime) {
@@ -130,8 +152,8 @@ export default function EventFormDrawer({
     { skip: !open },
   )
   const { data: subCategoriesData, isLoading: subCategoriesLoading } = useGetSubCategoriesQuery(
-    { category: 'event', page: 1, limit: 100 },
-    { skip: !open },
+    { category: category as PlatformCategory, page: 1, limit: 100 },
+    { skip: !open || !category },
   )
 
   const branchOptions = useMemo(
@@ -175,19 +197,28 @@ export default function EventFormDrawer({
 
   useEffect(() => {
     if (!open) return
+
+    const profileCategory =
+      typeof user?.extra?.category === 'string' ? user.extra.category : undefined
+    const fallbackCategory = defaultCategory(dashboardRole, profileCategory)
+
     setPendingImageFile(null)
     if (mode === 'edit' && initial) {
       const values = eventToFormValues(initial)
       form.setFieldsValue({
         ...values,
+        category: initial.mainCategory
+          ? dashboardRoleToPlatformCategory(initial.mainCategory)
+          : fallbackCategory,
         startTime: toDatetimeLocal(values.startTime),
         endTime: toDatetimeLocal(values.endTime),
         registrationDeadline: toDatetimeLocal(values.registrationDeadline),
       })
-    } else {
-      form.setFieldsValue(blankValues)
+      return
     }
-  }, [open, mode, initial, form])
+
+    form.setFieldsValue(blankValues(fallbackCategory))
+  }, [open, mode, initial, form, dashboardRole, user?.extra?.category])
 
   const notPastRule = (label: string, initialIso?: string) => ({
     validator: async (_: unknown, value: string) => {
@@ -269,9 +300,15 @@ export default function EventFormDrawer({
       width={780}
       placement="right"
       destroyOnHidden
-      styles={{ body: { overflow: 'visible' } }}
+      styles={{
+        body: { overflowY: 'auto', paddingBottom: 24 },
+        footer: {
+          borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+          padding: '12px 24px',
+        },
+      }}
       footer={
-        <Space style={{ display: 'flex', justifyContent: 'flex-end', width: '100%' }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, width: '100%' }}>
           <Button onClick={onCancel} disabled={busy}>
             Cancel
           </Button>
@@ -282,10 +319,15 @@ export default function EventFormDrawer({
                 ? 'Save changes'
                 : 'Create event'}
           </Button>
-        </Space>
+        </div>
       }
     >
-      <Form form={form} layout="vertical" initialValues={blankValues} requiredMark="optional">
+      <Form
+        form={form}
+        layout="vertical"
+        initialValues={blankValues(defaultCategory(dashboardRole, user?.extra?.category))}
+        requiredMark="optional"
+      >
         <Divider titlePlacement="start" orientationMargin={0} plain>
           Basic info
         </Divider>
@@ -332,6 +374,29 @@ export default function EventFormDrawer({
                 onChange={(url) => form.setFieldValue('image', url)}
                 hint="Select image — uploads when you save the event"
                 heightClass="h-40"
+              />
+            </Form.Item>
+          </Col>
+
+          <Col span={12}>
+            <Form.Item
+              name="category"
+              label="Category"
+              rules={[{ required: true, message: 'Category is required' }]}
+            >
+              <Select options={PLATFORM_CATEGORY_OPTIONS} disabled />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item name="subCategory" label="Sub category">
+              <Select
+                allowClear
+                showSearch
+                optionFilterProp="label"
+                placeholder={category ? 'Select sub category' : 'Select a category first'}
+                loading={subCategoriesLoading}
+                options={subCategoryOptions}
+                disabled={!category}
               />
             </Form.Item>
           </Col>
@@ -386,6 +451,7 @@ export default function EventFormDrawer({
               <Input type="datetime-local" min={registrationMin} />
             </Form.Item>
           </Col>
+
         </Row>
 
         <Divider titlePlacement="start" orientationMargin={0} plain>
@@ -469,14 +535,10 @@ export default function EventFormDrawer({
         </Row>
 
         <Divider titlePlacement="start" orientationMargin={0} plain>
-          Optional
+          Classification
         </Divider>
         <Row gutter={16}>
-          <Col span={12}>
-            <Form.Item name="organizerName" label="Organizer name">
-              <Input placeholder="Evently" />
-            </Form.Item>
-          </Col>
+         
           <Col span={12}>
             <Form.Item name="businessCategory" label="Business category">
               <Select
@@ -486,18 +548,6 @@ export default function EventFormDrawer({
                 placeholder="Select business category"
                 loading={categoriesLoading}
                 options={businessCategoryOptions}
-              />
-            </Form.Item>
-          </Col>
-          <Col span={12}>
-            <Form.Item name="subCategory" label="Sub category">
-              <Select
-                allowClear
-                showSearch
-                optionFilterProp="label"
-                placeholder="Select sub category"
-                loading={subCategoriesLoading}
-                options={subCategoryOptions}
               />
             </Form.Item>
           </Col>
@@ -513,6 +563,7 @@ export default function EventFormDrawer({
               />
             </Form.Item>
           </Col>
+         
         </Row>
       </Form>
     </Drawer>

@@ -1,4 +1,5 @@
 import type { EventApiDoc, EventPayload, EventRelationRef } from '../../../redux/api/eventApi'
+import { dashboardRoleToPlatformCategory } from '../services/serviceTypes'
 import type { Event, EventFormValues } from './eventTypes'
 
 function relationId(value: EventRelationRef): string {
@@ -55,6 +56,9 @@ export function eventToFormValues(event: Event): EventFormValues {
     maxCapacity: event.maxCapacity,
     ticketPrice: event.ticketPrice,
     image: event.image,
+    category: event.mainCategory
+      ? dashboardRoleToPlatformCategory(event.mainCategory)
+      : '',
     subCategory: event.subCategoryId ?? '',
     businessCategory: event.businessCategoryId ?? '',
     organizerName: event.organizerName ?? '',

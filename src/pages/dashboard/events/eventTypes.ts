@@ -3,6 +3,8 @@ export type EventLocation = {
   coordinates: [number, number]
 }
 
+import type { PlatformCategory } from '../services/serviceTypes'
+
 export type EventFormValues = {
   name: string
   description: string
@@ -15,6 +17,7 @@ export type EventFormValues = {
   maxCapacity: number
   ticketPrice: number
   image: string
+  category: PlatformCategory | ''
   subCategory: string
   businessCategory: string
   organizerName: string
