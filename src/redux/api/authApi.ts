@@ -170,6 +170,7 @@ export const DELIVERY_METHOD_OPTIONS: {
 export interface BusinessInformationPayload {
     businessName: string;
     description: string;
+    profilePicture?: string;
     category: string;
     socialLinks: BusinessSocialLinks;
     coverImage: string;
@@ -269,6 +270,7 @@ const authApi = baseApi.injectEndpoints({
                     clearAuthStorage()
                     clearStoredUser()
                     dispatch(logoutAction())
+                    dispatch(baseApi.util.resetApiState())
                 }
             },
             invalidatesTags: ['Auth'],

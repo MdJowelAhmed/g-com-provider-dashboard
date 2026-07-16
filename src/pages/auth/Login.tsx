@@ -44,7 +44,7 @@ export default function Login() {
         password,
       }).unwrap()
 
-      const profileResponse = await fetchProfile().unwrap()
+      const profileResponse = await fetchProfile(undefined, false).unwrap()
       if (!profileResponse.success || !profileResponse.data) {
         setError('Signed in, but profile could not be loaded. Please try again.')
         return

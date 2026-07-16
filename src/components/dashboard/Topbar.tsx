@@ -64,7 +64,13 @@ export default function Topbar({ user }: Props) {
         </button>
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-brand text-sm font-semibold text-white">
-            {initials}
+           {
+            user.profileImage ? (
+              <img src={user.profileImage} alt="Profile" className="h-full w-full object-cover rounded-full" />
+            ) : (
+              initials
+            )
+           }
           </div>
           <div className="hidden text-right sm:block">
             <div className="text-sm font-medium text-white">
