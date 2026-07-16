@@ -14,6 +14,8 @@ import {
   message,
 } from 'antd'
 import ImageUploader from '../../../components/common/ImageUploader'
+import { useDashboardRole } from '../../../auth/useDashboardRole'
+import { useAuth } from '../../../context/AuthContext'
 import { useGetBusinessCategoriesQuery } from '../../../redux/api/businessCategoryApi'
 import { useGetShopsQuery } from '../../../redux/api/shopManagementApi'
 import { useGetSubCategoriesQuery } from '../../../redux/api/serviceApi'
@@ -21,6 +23,12 @@ import {
   uploadImageFile,
   useGetPresignedUploadUrlMutation,
 } from '../../../redux/api/imageUploadApi'
+import {
+  PLATFORM_CATEGORY_OPTIONS,
+  businessCategoryToPlatformCategory,
+  dashboardRoleToPlatformCategory,
+  type PlatformCategory,
+} from '../services/serviceTypes'
 import {
   BED_TYPE_OPTIONS,
   ROOM_AMENITIES,
@@ -39,7 +47,17 @@ type Props = {
   onSubmit: (values: RoomFormValues) => void | Promise<void>
 }
 
-const blankValues: RoomFormValues = {
+function defaultCategory(
+  dashboardRole: string,
+  profileCategory?: string,
+): PlatformCategory {
+  if (profileCategory?.trim()) {
+    return businessCategoryToPlatformCategory(profileCategory)
+  }
+  return dashboardRoleToPlatformCategory(dashboardRole)
+}
+
+const blankValues = (category: PlatformCategory): RoomFormValues => ({
   name: '',
   roomNumber: '',
   roomCode: '',
@@ -47,6 +65,7 @@ const blankValues: RoomFormValues = {
   bedType: BED_TYPE_OPTIONS[3],
   size: '',
   basePrice: 0,
+  category,
   subCategory: '',
   businessCategory: '',
   branch: '',
@@ -57,7 +76,7 @@ const blankValues: RoomFormValues = {
   totalGuest: 2,
   otherAmenities: [],
   image: '',
-}
+})
 
 export default function RoomFormDrawer({
   open,
@@ -68,9 +87,13 @@ export default function RoomFormDrawer({
   onSubmit,
 }: Props) {
   const [form] = Form.useForm<RoomFormValues>()
+  const { user } = useAuth()
+  const dashboardRole = useDashboardRole()
   const [pendingImageFile, setPendingImageFile] = useState<File | null>(null)
   const [isUploadingImage, setIsUploadingImage] = useState(false)
   const [getPresignedUrl] = useGetPresignedUploadUrlMutation()
+
+  const category = Form.useWatch('category', form) as PlatformCategory | '' | undefined
 
   const { data: shopsData, isLoading: shopsLoading } = useGetShopsQuery(
     { page: 1, limit: 100 },
@@ -81,8 +104,8 @@ export default function RoomFormDrawer({
     { skip: !open },
   )
   const { data: subCategoriesData, isLoading: subCategoriesLoading } = useGetSubCategoriesQuery(
-    { category: 'stay', page: 1, limit: 100 },
-    { skip: !open },
+    { category: category as PlatformCategory, page: 1, limit: 100 },
+    { skip: !open || !category },
   )
 
   const branchOptions = useMemo(
@@ -116,23 +139,37 @@ export default function RoomFormDrawer({
 
   useEffect(() => {
     if (!open) return
+
+    const profileCategory =
+      typeof user?.extra?.category === 'string' ? user.extra.category : undefined
+    const fallbackCategory = defaultCategory(dashboardRole, profileCategory)
+
     setPendingImageFile(null)
     if (mode === 'edit' && initial) {
-      form.setFieldsValue(roomToFormValues(initial))
-    } else {
-      form.setFieldsValue(blankValues)
+      form.setFieldsValue({
+        ...roomToFormValues(initial),
+        category: initial.mainCategory
+          ? dashboardRoleToPlatformCategory(initial.mainCategory)
+          : fallbackCategory,
+      })
+      return
     }
-  }, [open, mode, initial, form])
 
-  useEffect(() => {
-    if (!open || mode !== 'add') return
-    if (!form.getFieldValue('branch') && branchOptions[0]) {
-      form.setFieldValue('branch', branchOptions[0].value)
-    }
-    if (!form.getFieldValue('businessCategory') && businessCategoryOptions[0]) {
-      form.setFieldValue('businessCategory', businessCategoryOptions[0].value)
-    }
-  }, [open, mode, form, branchOptions, businessCategoryOptions])
+    form.setFieldsValue({
+      ...blankValues(fallbackCategory),
+      branch: branchOptions[0]?.value ?? '',
+      businessCategory: businessCategoryOptions[0]?.value ?? '',
+    })
+  }, [
+    open,
+    mode,
+    initial,
+    form,
+    branchOptions,
+    businessCategoryOptions,
+    dashboardRole,
+    user?.extra?.category,
+  ])
 
   const handleOk = async () => {
     try {
@@ -197,7 +234,12 @@ export default function RoomFormDrawer({
         </Space>
       }
     >
-      <Form form={form} layout="vertical" initialValues={blankValues} requiredMark="optional">
+      <Form
+        form={form}
+        layout="vertical"
+        initialValues={blankValues(defaultCategory(dashboardRole, user?.extra?.category))}
+        requiredMark="optional"
+      >
         <Divider titlePlacement="start" orientationMargin={0} plain>
           Basic info
         </Divider>
@@ -259,6 +301,32 @@ export default function RoomFormDrawer({
               />
             </Form.Item>
           </Col>
+
+          <Col span={12}>
+            <Form.Item
+              name="category"
+              label="Category"
+              rules={[{ required: true, message: 'Category is required' }]}
+            >
+              <Select options={PLATFORM_CATEGORY_OPTIONS} disabled />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item
+              name="subCategory"
+              label="Sub category"
+              rules={[{ required: true, message: 'Select a sub category' }]}
+            >
+              <Select
+                showSearch
+                optionFilterProp="label"
+                placeholder={category ? 'Select sub category' : 'Select a category first'}
+                loading={subCategoriesLoading}
+                options={subCategoryOptions}
+                disabled={!category}
+              />
+            </Form.Item>
+          </Col>
         </Row>
 
         <Divider titlePlacement="start" orientationMargin={0} plain>
@@ -312,6 +380,7 @@ export default function RoomFormDrawer({
           Classification
         </Divider>
         <Row gutter={16}>
+         
           <Col span={12}>
             <Form.Item
               name="businessCategory"
@@ -328,21 +397,6 @@ export default function RoomFormDrawer({
             </Form.Item>
           </Col>
           <Col span={12}>
-            <Form.Item
-              name="subCategory"
-              label="Sub category"
-              rules={[{ required: true, message: 'Select a sub category' }]}
-            >
-              <Select
-                showSearch
-                optionFilterProp="label"
-                placeholder="Select sub category"
-                loading={subCategoriesLoading}
-                options={subCategoryOptions}
-              />
-            </Form.Item>
-          </Col>
-          <Col span={24}>
             <Form.Item
               name="branch"
               label="Branch"

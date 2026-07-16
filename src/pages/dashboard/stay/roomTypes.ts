@@ -1,3 +1,5 @@
+import type { PlatformCategory } from '../services/serviceTypes'
+
 export type RoomFormValues = {
   name: string
   roomNumber: string
@@ -6,6 +8,7 @@ export type RoomFormValues = {
   bedType: string
   size: string
   basePrice: number
+  category: PlatformCategory | ''
   subCategory: string
   businessCategory: string
   branch: string

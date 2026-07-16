@@ -1,4 +1,5 @@
 import type { RoomApiDoc, RoomPayload, RoomRelationRef } from '../../../redux/api/roomApi'
+import { dashboardRoleToPlatformCategory } from '../services/serviceTypes'
 import type { Room, RoomFormValues } from './roomTypes'
 
 function relationId(value: RoomRelationRef): string {
@@ -53,6 +54,9 @@ export function roomToFormValues(room: Room): RoomFormValues {
     bedType: room.bedType,
     size: room.size,
     basePrice: room.basePrice,
+    category: room.mainCategory
+      ? dashboardRoleToPlatformCategory(room.mainCategory)
+      : '',
     subCategory: room.subCategoryId,
     businessCategory: room.businessCategoryId,
     branch: room.branchId,
