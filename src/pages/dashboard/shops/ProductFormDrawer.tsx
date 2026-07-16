@@ -1,15 +1,21 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Modal, Form, Input, InputNumber, Select, Row, Col, Divider } from 'antd'
+import { Drawer, Form, Input, InputNumber, Select, Row, Col, Divider, Button, Space } from 'antd'
 import ImageUploader from '../../../components/common/ImageUploader'
+import { useDashboardRole } from '../../../auth/useDashboardRole'
+import { useAuth } from '../../../context/AuthContext'
 import { useGetBusinessCategoriesQuery } from '../../../redux/api/businessCategoryApi'
 import { useGetShopsQuery } from '../../../redux/api/shopManagementApi'
 import { useGetSubCategoriesQuery } from '../../../redux/api/serviceApi'
 import {
+  PLATFORM_CATEGORY_OPTIONS,
+  businessCategoryToPlatformCategory,
+  dashboardRoleToPlatformCategory,
+  type PlatformCategory,
+} from '../services/serviceTypes'
+import {
   PRODUCT_CATEGORIES,
   type Product,
 } from './productTypes'
-
-const PRODUCT_PLATFORM_CATEGORY = 'shop'
 
 export type ProductSubmitValues = Omit<Product, 'id' | 'createdAt' | 'updatedAt'> & {
   imageFile: File | null
@@ -21,12 +27,24 @@ type Props = {
   initial?: Product | null
   onCancel: () => void
   submitting?: boolean
-  onSubmit: (values: ProductSubmitValues) => void
+  onSubmit: (values: ProductSubmitValues) => void | Promise<void>
 }
 
-type FormValues = Omit<Product, 'id' | 'createdAt' | 'updatedAt'>
+type FormValues = Omit<Product, 'id' | 'createdAt' | 'updatedAt'> & {
+  platformCategory: PlatformCategory | ''
+}
 
-const blankValues: FormValues = {
+function defaultPlatformCategory(
+  dashboardRole: string,
+  profileCategory?: string,
+): PlatformCategory {
+  if (profileCategory?.trim()) {
+    return businessCategoryToPlatformCategory(profileCategory)
+  }
+  return dashboardRoleToPlatformCategory(dashboardRole)
+}
+
+const blankValues = (platformCategory: PlatformCategory): FormValues => ({
   image: '',
   name: '',
   sku: '',
@@ -41,7 +59,8 @@ const blankValues: FormValues = {
   weight: null,
   deliveryMethod: 'external-delivery',
   deliveryFee: 0,
-  deliveryTime: "",
+  deliveryTime: '',
+  platformCategory,
   subCategory: '',
   branch: '',
   businessCategory: '',
@@ -50,9 +69,9 @@ const blankValues: FormValues = {
   status: 'active',
   hidden: false,
   featured: false,
-}
+})
 
-export default function ProductFormModal({
+export default function ProductFormDrawer({
   open,
   mode,
   initial,
@@ -61,7 +80,14 @@ export default function ProductFormModal({
   onSubmit,
 }: Props) {
   const [form] = Form.useForm<FormValues>()
+  const { user } = useAuth()
+  const dashboardRole = useDashboardRole()
   const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null)
+
+  const platformCategory = Form.useWatch('platformCategory', form) as
+    | PlatformCategory
+    | ''
+    | undefined
 
   const { data: shopsData, isLoading: shopsLoading } = useGetShopsQuery(
     { page: 1, limit: 100 },
@@ -72,8 +98,8 @@ export default function ProductFormModal({
     { skip: !open },
   )
   const { data: subCategoriesData, isLoading: subCategoriesLoading } = useGetSubCategoriesQuery(
-    { category: PRODUCT_PLATFORM_CATEGORY, page: 1, limit: 100 },
-    { skip: !open },
+    { category: platformCategory as PlatformCategory, page: 1, limit: 100 },
+    { skip: !open || !platformCategory },
   )
 
   const branchOptions = useMemo(
@@ -107,57 +133,85 @@ export default function ProductFormModal({
 
   useEffect(() => {
     if (!open) return
+
+    const profileCategory =
+      typeof user?.extra?.category === 'string' ? user.extra.category : undefined
+    const fallbackPlatform = defaultPlatformCategory(dashboardRole, profileCategory)
+
+    setSelectedImageFile(null)
+
     if (mode === 'edit' && initial) {
       const { id: _id, createdAt: _c, updatedAt: _u, ...rest } = initial
       void _id
       void _c
       void _u
-      form.setFieldsValue(rest)
-    } else {
-      form.setFieldsValue(blankValues)
+      form.setFieldsValue({
+        ...rest,
+        platformCategory: rest.category
+          ? dashboardRoleToPlatformCategory(rest.category)
+          : fallbackPlatform,
+      })
+      return
     }
-    setSelectedImageFile(null)
-  }, [open, mode, initial, form])
 
-  // Prefill default branch / business category once options load — without
-  // wiping the image or other fields the user already filled in.
-  useEffect(() => {
-    if (!open || mode !== 'add') return
-    if (!form.getFieldValue('branch') && branchOptions[0]) {
-      form.setFieldValue('branch', branchOptions[0].value)
-    }
-    if (!form.getFieldValue('businessCategory') && businessCategoryOptions[0]) {
-      form.setFieldValue('businessCategory', businessCategoryOptions[0].value)
-    }
-  }, [open, mode, form, branchOptions, businessCategoryOptions])
+    form.setFieldsValue({
+      ...blankValues(fallbackPlatform),
+      branch: branchOptions[0]?.value ?? '',
+      businessCategory: businessCategoryOptions[0]?.value ?? '',
+    })
+  }, [
+    open,
+    mode,
+    initial,
+    form,
+    branchOptions,
+    businessCategoryOptions,
+    dashboardRole,
+    user?.extra?.category,
+  ])
 
   const handleOk = async () => {
-    const values = await form.validateFields()
-    onSubmit({
-      ...values,
-      salePrice: values.salePrice ?? null,
-      costPrice: values.costPrice ?? null,
-      weight: values.weight ?? null,
-      imageFile: selectedImageFile,
-    })
+    try {
+      const values = await form.validateFields()
+      const { platformCategory: _platformCategory, ...rest } = values
+      void _platformCategory
+      await onSubmit({
+        ...rest,
+        salePrice: rest.salePrice ?? null,
+        costPrice: rest.costPrice ?? null,
+        weight: rest.weight ?? null,
+        imageFile: selectedImageFile,
+      })
+    } catch {
+      // validation errors shown by ant form
+    }
   }
 
   return (
-    <Modal
+    <Drawer
       open={open}
       title={mode === 'edit' ? 'Edit product' : 'Add new product'}
-      okText={mode === 'edit' ? 'Save changes' : 'Add product'}
-      confirmLoading={submitting}
-      onOk={handleOk}
-      onCancel={onCancel}
-      width={760}
+      onClose={onCancel}
+      width={780}
+      placement="right"
       destroyOnHidden
-      centered
+      footer={
+        <Space style={{ display: 'flex', justifyContent: 'flex-end', width: '100%' }}>
+          <Button onClick={onCancel} disabled={submitting}>
+            Cancel
+          </Button>
+          <Button type="primary" onClick={handleOk} loading={submitting}>
+            {mode === 'edit' ? 'Save changes' : 'Add product'}
+          </Button>
+        </Space>
+      }
     >
       <Form
         form={form}
         layout="vertical"
-        initialValues={blankValues}
+        initialValues={blankValues(
+          defaultPlatformCategory(dashboardRole, user?.extra?.category),
+        )}
         requiredMark="optional"
       >
         <Divider titlePlacement="start" orientationMargin={0} plain>
@@ -173,7 +227,7 @@ export default function ProductFormModal({
               <Input placeholder="e.g. Classic Denim Jacket" />
             </Form.Item>
           </Col>
-  
+
           <Col span={24}>
             <Form.Item
               name="image"
@@ -198,22 +252,42 @@ export default function ProductFormModal({
                 onChange={(url) => {
                   form.setFieldValue('image', url)
                 }}
-                hint="Select image — uploads when you click Add product"
+                hint="Select image — uploads when you save the product"
                 heightClass="h-40"
               />
             </Form.Item>
           </Col>
-      
         </Row>
 
-      
+        <Divider titlePlacement="start" orientationMargin={0} plain>
+          Classification
+        </Divider>
         <Row gutter={16}>
           <Col span={8}>
             <Form.Item
-              name="businessCategory"
-              label="Business category"
-              // rules={[{ required: true, message: 'Select a business category' }]}
+              name="platformCategory"
+              label="Category"
+              rules={[{ required: true, message: 'Category is required' }]}
             >
+              <Select options={PLATFORM_CATEGORY_OPTIONS} disabled />
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item name="subCategory" label="Sub category">
+              <Select
+                showSearch
+                optionFilterProp="label"
+                loading={subCategoriesLoading}
+                options={subCategoryOptions}
+                placeholder={
+                  platformCategory ? 'Select sub category' : 'Select a category first'
+                }
+                disabled={!platformCategory}
+              />
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item name="businessCategory" label="Business category">
               <Select
                 showSearch
                 optionFilterProp="label"
@@ -223,27 +297,8 @@ export default function ProductFormModal({
               />
             </Form.Item>
           </Col>
-          <Col span={8}>
-            <Form.Item
-              name="subCategory"
-              label="Sub category"
-              // rules={[{ required: true, message: 'Select a sub category' }]}
-            >
-              <Select
-                showSearch
-                optionFilterProp="label"
-                loading={subCategoriesLoading}
-                options={subCategoryOptions}
-                placeholder="Select sub category"
-              />
-            </Form.Item>
-          </Col>
-          <Col span={8}>
-            <Form.Item
-              name="branch"
-              label="Branch (shop)"
-              // rules={[{ required: true, message: 'Select a branch' }]}
-            >
+          <Col span={24}>
+            <Form.Item name="branch" label="Branch (shop)">
               <Select
                 showSearch
                 optionFilterProp="label"
@@ -288,12 +343,7 @@ export default function ProductFormModal({
             </Form.Item>
           </Col>
         </Row>
-
-     
-
-     
-      
       </Form>
-    </Modal>
+    </Drawer>
   )
 }

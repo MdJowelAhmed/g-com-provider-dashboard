@@ -5,7 +5,7 @@ import type { FetchBaseQueryError } from '@reduxjs/toolkit/query'
 import PageHeader from '../../../components/dashboard/PageHeader'
 import SearchField from '../../../components/common/SearchField'
 import { useSearchField } from '../../../hooks/useSearchField'
-import ProductFormModal, { type ProductSubmitValues } from './ProductFormModal'
+import ProductFormDrawer, { type ProductSubmitValues } from './ProductFormDrawer'
 import ProductDetailsDrawer from './ProductDetailsDrawer'
 import {
   useCreateProductMutation,
@@ -394,7 +394,7 @@ export default function ProductsPage() {
         onEdit={(p) => setModal({ mode: 'edit', product: p })}
       />
 
-      <ProductFormModal
+      <ProductFormDrawer
         open={modal.mode !== 'closed'}
         mode={modal.mode === 'edit' ? 'edit' : 'add'}
         initial={modal.mode === 'edit' ? modal.product : null}
