@@ -1,3 +1,5 @@
+import type { PlatformCategory } from '../services/serviceTypes'
+
 export type MenuStatus = 'active' | 'draft' | 'archived'
 
 export type MenuItem = {
@@ -8,6 +10,7 @@ export type MenuItem = {
   price: number
   deliveryFee: number
   deliveryTime: string
+  mainCategory?: string
   subCategory?: string
   subCategoryName?: string
   branch?: string
@@ -19,7 +22,11 @@ export type MenuItem = {
   updatedAt: string
 }
 
-export type MenuFormValues = Omit<MenuItem, 'id' | 'createdAt' | 'updatedAt' | 'status'> & {
+export type MenuFormValues = Omit<
+  MenuItem,
+  'id' | 'createdAt' | 'updatedAt' | 'status' | 'mainCategory'
+> & {
+  category: PlatformCategory | ''
   imageFile: File | null
 }
 

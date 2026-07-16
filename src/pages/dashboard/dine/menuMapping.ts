@@ -1,4 +1,5 @@
 import type { ProductApiDoc, ProductPayload, ProductRelationRef } from '../../../redux/api/productsApi'
+import { dashboardRoleToPlatformCategory } from '../services/serviceTypes'
 import type { MenuFormValues, MenuItem } from './menuTypes'
 
 function refId(ref: ProductRelationRef): string {
@@ -34,6 +35,7 @@ export function mapMenuItemFromApi(doc: ProductApiDoc): MenuItem {
         : doc.deliveryTime != null
           ? String(doc.deliveryTime)
           : '',
+    mainCategory: doc.mainCategory,
     subCategory: refId(doc.subCategory),
     subCategoryName: refName(doc.subCategory),
     branch: refId(doc.branch),
@@ -54,6 +56,9 @@ export function menuItemToFormValues(item: MenuItem): Omit<MenuFormValues, 'imag
     price: item.price,
     deliveryFee: item.deliveryFee,
     deliveryTime: item.deliveryTime,
+    category: item.mainCategory
+      ? dashboardRoleToPlatformCategory(item.mainCategory)
+      : '',
     subCategory: item.subCategory ?? '',
     branch: item.branch ?? '',
     businessCategory: item.businessCategory ?? '',

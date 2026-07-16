@@ -12,13 +12,19 @@ import {
   Space,
 } from 'antd'
 import ImageUploader from '../../../components/common/ImageUploader'
+import { useDashboardRole } from '../../../auth/useDashboardRole'
+import { useAuth } from '../../../context/AuthContext'
 import { useGetBusinessCategoriesQuery } from '../../../redux/api/businessCategoryApi'
 import { useGetShopsQuery } from '../../../redux/api/shopManagementApi'
 import { useGetSubCategoriesQuery } from '../../../redux/api/serviceApi'
+import {
+  PLATFORM_CATEGORY_OPTIONS,
+  businessCategoryToPlatformCategory,
+  dashboardRoleToPlatformCategory,
+  type PlatformCategory,
+} from '../services/serviceTypes'
 import type { MenuFormValues, MenuItem } from './menuTypes'
 import { menuItemToFormValues } from './menuMapping'
-
-const MENU_PLATFORM_CATEGORY = 'dine'
 
 type Props = {
   open: boolean
@@ -31,17 +37,28 @@ type Props = {
 
 type FormValues = Omit<MenuFormValues, 'imageFile'>
 
-const blankValues: FormValues = {
+function defaultCategory(
+  dashboardRole: string,
+  profileCategory?: string,
+): PlatformCategory {
+  if (profileCategory?.trim()) {
+    return businessCategoryToPlatformCategory(profileCategory)
+  }
+  return dashboardRoleToPlatformCategory(dashboardRole)
+}
+
+const blankValues = (category: PlatformCategory): FormValues => ({
   image: '',
   name: '',
   description: '',
   price: 0,
   deliveryFee: 0,
   deliveryTime: '',
+  category,
   subCategory: '',
   branch: '',
   businessCategory: '',
-}
+})
 
 export default function MenuFormDrawer({
   open,
@@ -52,7 +69,11 @@ export default function MenuFormDrawer({
   onSubmit,
 }: Props) {
   const [form] = Form.useForm<FormValues>()
+  const { user } = useAuth()
+  const dashboardRole = useDashboardRole()
   const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null)
+
+  const category = Form.useWatch('category', form) as PlatformCategory | '' | undefined
 
   const { data: shopsData, isLoading: shopsLoading } = useGetShopsQuery(
     { page: 1, limit: 100 },
@@ -63,8 +84,8 @@ export default function MenuFormDrawer({
     { skip: !open },
   )
   const { data: subCategoriesData, isLoading: subCategoriesLoading } = useGetSubCategoriesQuery(
-    { category: MENU_PLATFORM_CATEGORY, page: 1, limit: 100 },
-    { skip: !open },
+    { category: category as PlatformCategory, page: 1, limit: 100 },
+    { skip: !open || !category },
   )
 
   const branchOptions = useMemo(
@@ -78,9 +99,9 @@ export default function MenuFormDrawer({
 
   const businessCategoryOptions = useMemo(
     () =>
-      (categoriesData?.data ?? []).map((category) => ({
-        value: category._id,
-        label: category.name,
+      (categoriesData?.data ?? []).map((cat) => ({
+        value: cat._id,
+        label: cat.name,
       })),
     [categoriesData?.data],
   )
@@ -98,30 +119,49 @@ export default function MenuFormDrawer({
 
   useEffect(() => {
     if (!open) return
-    if (mode === 'edit' && initial) {
-      form.setFieldsValue(menuItemToFormValues(initial))
-    } else {
-      form.setFieldsValue(blankValues)
-    }
-    setSelectedImageFile(null)
-  }, [open, mode, initial, form])
 
-  useEffect(() => {
-    if (!open || mode !== 'add') return
-    if (!form.getFieldValue('branch') && branchOptions[0]) {
-      form.setFieldValue('branch', branchOptions[0].value)
+    const profileCategory =
+      typeof user?.extra?.category === 'string' ? user.extra.category : undefined
+    const fallbackCategory = defaultCategory(dashboardRole, profileCategory)
+
+    setSelectedImageFile(null)
+
+    if (mode === 'edit' && initial) {
+      form.setFieldsValue({
+        ...menuItemToFormValues(initial),
+        category: initial.mainCategory
+          ? dashboardRoleToPlatformCategory(initial.mainCategory)
+          : fallbackCategory,
+      })
+      return
     }
-    if (!form.getFieldValue('businessCategory') && businessCategoryOptions[0]) {
-      form.setFieldValue('businessCategory', businessCategoryOptions[0].value)
-    }
-  }, [open, mode, form, branchOptions, businessCategoryOptions])
+
+    form.setFieldsValue({
+      ...blankValues(fallbackCategory),
+      branch: branchOptions[0]?.value ?? '',
+      businessCategory: businessCategoryOptions[0]?.value ?? '',
+    })
+  }, [
+    open,
+    mode,
+    initial,
+    form,
+    branchOptions,
+    businessCategoryOptions,
+    dashboardRole,
+    user?.extra?.category,
+  ])
 
   const handleOk = async () => {
-    const values = await form.validateFields()
-    onSubmit({
-      ...values,
-      imageFile: selectedImageFile,
-    })
+    try {
+      const values = await form.validateFields()
+      onSubmit({
+        ...values,
+        imageFile: selectedImageFile,
+      })
+    } catch {
+      // validation errors shown by ant form
+    }
   }
 
   return (
@@ -143,7 +183,12 @@ export default function MenuFormDrawer({
         </Space>
       }
     >
-      <Form form={form} layout="vertical" initialValues={blankValues} requiredMark="optional">
+      <Form
+        form={form}
+        layout="vertical"
+        initialValues={blankValues(defaultCategory(dashboardRole, user?.extra?.category))}
+        requiredMark="optional"
+      >
         <Divider titlePlacement="start" orientationMargin={0} plain>
           Basic info
         </Divider>
@@ -164,6 +209,29 @@ export default function MenuFormDrawer({
               rules={[{ required: true, message: 'Description is required' }]}
             >
               <Input.TextArea rows={3} placeholder="Describe the dish" />
+            </Form.Item>
+          </Col>
+
+          <Col span={12}>
+            <Form.Item
+              name="category"
+              label="Category"
+              rules={[{ required: true, message: 'Category is required' }]}
+            >
+              <Select options={PLATFORM_CATEGORY_OPTIONS} disabled />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item name="subCategory" label="Sub category">
+              <Select
+                showSearch
+                allowClear
+                optionFilterProp="label"
+                loading={subCategoriesLoading}
+                options={subCategoryOptions}
+                placeholder={category ? 'Select sub category' : 'Select a category first'}
+                disabled={!category}
+              />
             </Form.Item>
           </Col>
           <Col span={24}>
@@ -199,7 +267,8 @@ export default function MenuFormDrawer({
           Classification
         </Divider>
         <Row gutter={16}>
-          <Col span={8}>
+        
+          <Col span={12}>
             <Form.Item name="businessCategory" label="Business category">
               <Select
                 showSearch
@@ -211,19 +280,7 @@ export default function MenuFormDrawer({
               />
             </Form.Item>
           </Col>
-          <Col span={8}>
-            <Form.Item name="subCategory" label="Sub category">
-              <Select
-                showSearch
-                allowClear
-                optionFilterProp="label"
-                loading={subCategoriesLoading}
-                options={subCategoryOptions}
-                placeholder="Select sub category"
-              />
-            </Form.Item>
-          </Col>
-          <Col span={8}>
+          <Col span={12}>
             <Form.Item name="branch" label="Branch">
               <Select
                 showSearch
