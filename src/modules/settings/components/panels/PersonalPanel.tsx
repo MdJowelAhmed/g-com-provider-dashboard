@@ -7,14 +7,16 @@ import {
   supportInputClass,
   supportLabelClass,
 } from '../../../../components/dashboard/support/supportFieldClasses'
-import { mapUserProfileToUser } from '../../../../auth/userProfile'
 import type { User } from '../../../../context/AuthContext'
-import { useAuth } from '../../../../context/AuthContext'
 import { resolveMediaUrl } from '../../../../redux/api/chatApi'
 import {
   useGetMyProfileQuery,
   useUpdateMyProfileMutation,
 } from '../../../../redux/api/authApi'
+import {
+  uploadImageFile,
+  useGetPresignedUploadUrlMutation,
+} from '../../../../redux/api/imageUploadApi'
 import SettingsCard from '../SettingsCard'
 import SettingsPrimaryButton from '../SettingsPrimaryButton'
 
@@ -40,19 +42,22 @@ function getApiErrorMessage(error: unknown, fallback: string) {
   return fallback
 }
 
-export default function PersonalPanel({ onDirty, onSaved }: Props) {
-  const { setUserFromProfile } = useAuth()
+export default function PersonalPanel({ updateUser, onDirty, onSaved }: Props) {
   const { data: profileResponse, isLoading } = useGetMyProfileQuery()
-  const [updateMyProfile, { isLoading: saving }] = useUpdateMyProfileMutation()
+  const [getPresignedUrl] = useGetPresignedUploadUrlMutation()
+  const [updateMyProfile] = useUpdateMyProfileMutation()
+
+  const profile = profileResponse?.data
 
   const [ownerName, setOwnerName] = useState('')
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
   const [address, setAddress] = useState('')
   const [profileImage, setProfileImage] = useState('')
+  const [profileImageFile, setProfileImageFile] = useState<File | null>(null)
+  const [uploaderKey, setUploaderKey] = useState(0)
+  const [saving, setSaving] = useState(false)
   const [ok, setOk] = useState(false)
-
-  const profile = profileResponse?.data
 
   useEffect(() => {
     if (!profile) return
@@ -70,24 +75,44 @@ export default function PersonalPanel({ onDirty, onSaved }: Props) {
     }
 
     setOk(false)
+    setSaving(true)
     try {
+      let imageUrl = profileImage.trim()
+
+      if (profileImageFile) {
+        imageUrl = await uploadImageFile(profileImageFile, (payload) =>
+          getPresignedUrl(payload).unwrap(),
+        )
+      }
+
       const result = await updateMyProfile({
         name: ownerName.trim(),
         phone: phone.trim(),
         address: address.trim(),
-        profileImage: profileImage.trim(),
+        profileImage: imageUrl,
       }).unwrap()
 
       if (result.data) {
-        setUserFromProfile(mapUserProfileToUser(result.data))
+        const nextProfileImage = result.data.profileImage ?? imageUrl
+        setProfileImage(nextProfileImage)
+        updateUser({
+          ownerName: result.data.name ?? ownerName.trim(),
+          phone: result.data.phone ?? phone.trim(),
+          address: result.data.address ?? address.trim(),
+          profileImage: nextProfileImage,
+        })
       }
 
+      setProfileImageFile(null)
+      setUploaderKey((k) => k + 1)
       onSaved()
       setOk(true)
       message.success(result.message || 'Personal details saved.')
       window.setTimeout(() => setOk(false), 2800)
     } catch (error) {
       message.error(getApiErrorMessage(error, 'Failed to update profile.'))
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -137,15 +162,16 @@ export default function PersonalPanel({ onDirty, onSaved }: Props) {
         <div className="grid gap-5 sm:grid-cols-2">
           <div className="space-y-2 sm:col-span-2">
             <ImageUploader
+              key={`profile-photo-${uploaderKey}`}
               label="Profile photo"
               value={profileImageDisplayUrl(profileImage)}
-              onChange={(url) => {
-                setProfileImage(url)
+              onFileSelect={(file) => {
+                setProfileImageFile(file)
                 onDirty()
               }}
-              autoUpload
+              autoUpload={false}
               heightClass="h-40"
-              hint="Upload a clear profile photo"
+              hint="Selected now, uploaded when you save changes"
               disabled={saving}
               className="w-40"
             />
