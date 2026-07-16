@@ -226,7 +226,95 @@ export default function ProductFormDrawer({
             >
               <Input placeholder="e.g. Classic Denim Jacket" />
             </Form.Item>
+
           </Col>
+
+          <Col span={12}>
+            <Form.Item
+              name="platformCategory"
+              label="Category"
+              rules={[{ required: true, message: 'Category is required' }]}
+            >
+              <Select options={PLATFORM_CATEGORY_OPTIONS} disabled />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item name="subCategory" label="Sub category">
+              <Select
+                showSearch
+                optionFilterProp="label"
+                loading={subCategoriesLoading}
+                options={subCategoryOptions}
+                placeholder={
+                  platformCategory ? 'Select sub category' : 'Select a category first'
+                }
+                disabled={!platformCategory}
+              />
+            </Form.Item>
+          </Col>
+
+        </Row>
+
+
+
+        <Divider titlePlacement="start" orientationMargin={0} plain>
+          Pricing
+        </Divider>
+
+        <Row gutter={16}>
+          <Col span={8}>
+            <Form.Item
+              name="price"
+              label="Price (GH₵)"
+              rules={[{ required: true, message: 'Price is required' }]}
+            >
+              <InputNumber min={0} step={0.01} style={{ width: '100%' }} />
+            </Form.Item>
+          </Col>
+
+          <Col span={8}>
+            <Form.Item
+              name="deliveryFee"
+              label="Delivery fee (GH₵)"
+              rules={[{ required: true, message: 'Delivery fee is required' }]}
+            >
+              <InputNumber min={0} step={0.01} style={{ width: '100%' }} />
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item
+              name="deliveryTime"
+              label="Delivery time (days)"
+              rules={[{ required: true, message: 'Delivery time is required' }]}
+            >
+              <InputNumber min={0} style={{ width: '100%' }} />
+            </Form.Item>
+          </Col>
+
+         
+            <Col span={12}>
+              <Form.Item name="businessCategory" label="Business category">
+                <Select
+                  showSearch
+                  optionFilterProp="label"
+                  loading={categoriesLoading}
+                  options={businessCategoryOptions}
+                  placeholder="Select business category"
+                />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="branch" label="Branch (shop)">
+                <Select
+                  showSearch
+                  optionFilterProp="label"
+                  loading={shopsLoading}
+                  options={branchOptions}
+                  placeholder="Select shop branch"
+                />
+              </Form.Item>
+            </Col>
+       
 
           <Col span={24}>
             <Form.Item
@@ -257,91 +345,9 @@ export default function ProductFormDrawer({
               />
             </Form.Item>
           </Col>
-        </Row>
 
-        <Divider titlePlacement="start" orientationMargin={0} plain>
-          Classification
-        </Divider>
-        <Row gutter={16}>
-          <Col span={8}>
-            <Form.Item
-              name="platformCategory"
-              label="Category"
-              rules={[{ required: true, message: 'Category is required' }]}
-            >
-              <Select options={PLATFORM_CATEGORY_OPTIONS} disabled />
-            </Form.Item>
-          </Col>
-          <Col span={8}>
-            <Form.Item name="subCategory" label="Sub category">
-              <Select
-                showSearch
-                optionFilterProp="label"
-                loading={subCategoriesLoading}
-                options={subCategoryOptions}
-                placeholder={
-                  platformCategory ? 'Select sub category' : 'Select a category first'
-                }
-                disabled={!platformCategory}
-              />
-            </Form.Item>
-          </Col>
-          <Col span={8}>
-            <Form.Item name="businessCategory" label="Business category">
-              <Select
-                showSearch
-                optionFilterProp="label"
-                loading={categoriesLoading}
-                options={businessCategoryOptions}
-                placeholder="Select business category"
-              />
-            </Form.Item>
-          </Col>
-          <Col span={24}>
-            <Form.Item name="branch" label="Branch (shop)">
-              <Select
-                showSearch
-                optionFilterProp="label"
-                loading={shopsLoading}
-                options={branchOptions}
-                placeholder="Select shop branch"
-              />
-            </Form.Item>
-          </Col>
-        </Row>
 
-        <Divider titlePlacement="start" orientationMargin={0} plain>
-          Pricing
-        </Divider>
-        <Row gutter={16}>
-          <Col span={8}>
-            <Form.Item
-              name="price"
-              label="Price (GH₵)"
-              rules={[{ required: true, message: 'Price is required' }]}
-            >
-              <InputNumber min={0} step={0.01} style={{ width: '100%' }} />
-            </Form.Item>
-          </Col>
 
-          <Col span={8}>
-            <Form.Item
-              name="deliveryFee"
-              label="Delivery fee (GH₵)"
-              rules={[{ required: true, message: 'Delivery fee is required' }]}
-            >
-              <InputNumber min={0} step={0.01} style={{ width: '100%' }} />
-            </Form.Item>
-          </Col>
-          <Col span={8}>
-            <Form.Item
-              name="deliveryTime"
-              label="Delivery time (days)"
-              rules={[{ required: true, message: 'Delivery time is required' }]}
-            >
-              <InputNumber min={0} style={{ width: '100%' }} />
-            </Form.Item>
-          </Col>
         </Row>
       </Form>
     </Drawer>
