@@ -253,12 +253,13 @@ export default function PostFormModal({
             </Form.Item>
           </div>
 
-          <Form.Item
+        <div className="grid gap-4 sm:grid-cols-2">
+        <Form.Item
             name="caption"
             label={<span className={postLabelClass}>Caption</span>}
             rules={[{ required: true, message: 'Caption is required' }]}
           >
-            <textarea rows={4} placeholder="Describe the offer" className={postTextareaClass} />
+            <textarea rows={7} placeholder="Describe the offer" className={postTextareaClass} />
           </Form.Item>
 
           <Form.Item
@@ -282,6 +283,7 @@ export default function PostFormModal({
               onFileSelect={setPendingMediaFile}
             />
           </Form.Item>
+        </div>
 
           <div className="flex justify-end gap-3 border-t border-white/[0.06] pt-5">
             <button
