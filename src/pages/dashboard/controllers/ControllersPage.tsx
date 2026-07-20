@@ -1,4 +1,4 @@
-import { ShieldCheck, UserPlus } from 'lucide-react'
+import { UserPlus } from 'lucide-react'
 import { useCallback, useRef } from 'react'
 import { useAuth } from '../../../context/AuthContext'
 import { useDashboardRole } from '../../../auth/useDashboardRole'
@@ -22,10 +22,10 @@ export default function ControllersPage() {
         description="Create staff accounts, map route permissions, and keep access aligned with how your team actually works—API-ready keys match future enforcement."
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <span className="hidden h-10 items-center gap-2 rounded-md border border-surface-border bg-surface-card/90 px-3 text-xs text-gray-400 shadow-sm backdrop-blur-sm lg:inline-flex">
+            {/* <span className="hidden h-10 items-center gap-2 rounded-md border border-surface-border bg-surface-card/90 px-3 text-xs text-gray-400 shadow-sm backdrop-blur-sm lg:inline-flex">
               <ShieldCheck size={16} className="text-brand" />
               RBAC · tenant-scoped
-            </span>
+            </span> */}
             <button
               type="button"
               onClick={() => openCreateRef.current()}

@@ -32,6 +32,8 @@ export interface ControllersListResponse {
 export interface GetControllersParams {
   page?: number
   limit?: number
+  searchTerm?: string
+  status?: string
 }
 
 export interface ControllerPayload {

@@ -122,6 +122,11 @@ export default function ControllersManagementShell({
       <ControllerFiltersBar
         search={api.search}
         onSearchChange={api.setSearch}
+        onSearchClear={api.clearSearch}
+        onSearchFlush={api.flushSearch}
+        searchLoading={
+          api.isDebouncing || ((api.initialLoading || api.isFetching) && Boolean(api.searchTerm))
+        }
         statusFilter={api.statusFilter}
         onStatusChange={api.setStatusFilter}
       />

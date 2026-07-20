@@ -1,6 +1,7 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FetchBaseQueryError } from '@reduxjs/toolkit/query'
 import type { Role } from '../../../types/role'
+import { useSearchField } from '../../../hooks/useSearchField'
 import { clampPermissionKeysForRole, getAllowedNavPermissionIdsForRole } from '../../permissions/navPermissionMap'
 import {
   useCreateControllerMutation,
@@ -42,7 +43,14 @@ export function getControllerApiErrorMessage(error: unknown, fallback: string) {
 }
 
 export function useControllers(tenantUserId: string, dashboardRole: Role) {
-  const [search, setSearch] = useState('')
+  const {
+    inputValue,
+    setInputValue,
+    searchTerm,
+    clear: clearSearch,
+    flush,
+    isDebouncing,
+  } = useSearchField({ minChars: 2 })
   const [statusFilter, setStatusFilter] = useState<string>(ALL_FILTER)
   const [sortKey, setSortKey] = useState<SortKey>('updatedAt')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
@@ -53,6 +61,8 @@ export function useControllers(tenantUserId: string, dashboardRole: Role) {
   const { data, isLoading, isFetching, isError } = useGetControllersQuery({
     page: 1,
     limit: 100,
+    ...(searchTerm ? { searchTerm } : {}),
+    ...(statusFilter !== ALL_FILTER ? { status: statusFilter } : {}),
   })
   const [createController, { isLoading: isCreating }] = useCreateControllerMutation()
   const [updateController, { isLoading: isUpdating }] = useUpdateControllerMutation()
@@ -68,19 +78,15 @@ export function useControllers(tenantUserId: string, dashboardRole: Role) {
     [data?.data, tenantUserId, roleNavIds],
   )
 
-  const filteredSorted = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    let list = rows.filter((r) => {
-      if (statusFilter !== ALL_FILTER && r.status !== statusFilter) return false
-      if (!q) return true
-      return (
-        r.displayName.toLowerCase().includes(q) ||
-        r.email.toLowerCase().includes(q) ||
-        r.roleLabel.toLowerCase().includes(q)
-      )
-    })
+  useEffect(() => {
+    setPage(1)
+    setSelectedIds([])
+  }, [searchTerm, statusFilter])
 
-    list = [...list].sort((a, b) => {
+  const filteredSorted = useMemo(() => {
+    // Search + status are handled by the backend (`searchTerm`, `status`).
+    // Keep client-side sort for table column headers.
+    return [...rows].sort((a, b) => {
       switch (sortKey) {
         case 'displayName':
           return compareStrings(a.displayName, b.displayName, sortDir)
@@ -95,9 +101,7 @@ export function useControllers(tenantUserId: string, dashboardRole: Role) {
           return compareTime(a.updatedAt, b.updatedAt, sortDir)
       }
     })
-
-    return list
-  }, [rows, search, statusFilter, sortKey, sortDir])
+  }, [rows, sortKey, sortDir])
 
   const total = filteredSorted.length
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
@@ -190,8 +194,12 @@ export function useControllers(tenantUserId: string, dashboardRole: Role) {
   )
 
   return {
-    search,
-    setSearch,
+    search: inputValue,
+    setSearch: setInputValue,
+    searchTerm,
+    clearSearch,
+    flushSearch: flush,
+    isDebouncing,
     statusFilter,
     setStatusFilter,
     sortKey,
@@ -208,6 +216,7 @@ export function useControllers(tenantUserId: string, dashboardRole: Role) {
     selectAllVisible,
     clearSelection,
     initialLoading: isLoading || isFetching,
+    isFetching,
     isError,
     isSaving: isCreating || isUpdating || isDeleting,
     createController: createControllerRow,
