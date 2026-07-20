@@ -140,22 +140,55 @@ const GoogleMapLocationPicker = forwardRef<GoogleMapLocationPickerRef, Props>(
             geocoder.geocode({ location: { lat: latitude, lng: longitude } }, (results, status) => {
               if (status !== 'OK' || !results?.[0]) {
                 applyLocation({
-                  locationName: inputRef.current?.value?.trim() || valueRef.current?.locationName?.trim() || '',
+                  locationName:
+                    inputRef.current?.value?.trim() ||
+                    valueRef.current?.locationName?.trim() ||
+                    `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`,
                   latitude,
                   longitude,
                 })
                 return
               }
 
+              // Prefer the most specific result (often a POI / street address).
+              const best =
+                results.find((item) =>
+                  item.types?.some((t) =>
+                    ['establishment', 'point_of_interest', 'premise', 'street_address'].includes(t),
+                  ),
+                ) ?? results[0]
+
               applyLocation({
-                locationName: locationNameFromGeocoder(
-                  results[0],
-                  inputRef.current?.value?.trim() || valueRef.current?.locationName || '',
-                ),
+                locationName: locationNameFromGeocoder(best, best.formatted_address || ''),
                 latitude,
                 longitude,
               })
             })
+          }
+
+          const applyPlaceId = (placeId: string, fallbackLatLng: google.maps.LatLng) => {
+            const service = new googleMaps.maps.places.PlacesService(map)
+            service.getDetails(
+              {
+                placeId,
+                fields: ['name', 'formatted_address', 'geometry', 'vicinity'],
+              },
+              (place, status) => {
+                if (status !== googleMaps.maps.places.PlacesServiceStatus.OK || !place) {
+                  reverseGeocode(fallbackLatLng.lat(), fallbackLatLng.lng())
+                  return
+                }
+
+                const latitude = place.geometry?.location?.lat() ?? fallbackLatLng.lat()
+                const longitude = place.geometry?.location?.lng() ?? fallbackLatLng.lng()
+                const locationName = resolvePlaceName(place, place.formatted_address || '')
+
+                marker.setPosition({ lat: latitude, lng: longitude })
+                map.panTo({ lat: latitude, lng: longitude })
+                map.setZoom(15)
+                applyLocation({ locationName, latitude, longitude })
+              },
+            )
           }
 
           const autocomplete = new googleMaps.maps.places.Autocomplete(inputRef.current, {
@@ -219,7 +252,20 @@ const GoogleMapLocationPicker = forwardRef<GoogleMapLocationPickerRef, Props>(
 
           map.addListener('click', (event: google.maps.MapMouseEvent) => {
             if (disabled || !event.latLng) return
+
+            const placeId = (event as google.maps.IconMouseEvent).placeId
+            // Stop Google's default POI InfoWindow so our form fields stay in sync.
+            if (placeId && typeof (event as google.maps.IconMouseEvent).stop === 'function') {
+              ;(event as google.maps.IconMouseEvent).stop()
+            }
+
             marker.setPosition(event.latLng)
+
+            if (placeId) {
+              applyPlaceId(placeId, event.latLng)
+              return
+            }
+
             reverseGeocode(event.latLng.lat(), event.latLng.lng())
           })
 
@@ -301,7 +347,7 @@ const GoogleMapLocationPicker = forwardRef<GoogleMapLocationPickerRef, Props>(
         />
         <div
           ref={mapRef}
-          className="h-56 w-full overflow-hidden rounded-lg border border-surface-border bg-surface-elevated"
+          className="h-80 w-full overflow-hidden rounded-lg border border-surface-border bg-surface-elevated"
         />
         <div className="grid grid-cols-2 gap-3">
           <div className="rounded-md border border-surface-border bg-surface-elevated px-3 py-2">

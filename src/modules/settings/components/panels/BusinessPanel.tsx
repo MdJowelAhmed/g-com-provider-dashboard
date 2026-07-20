@@ -303,7 +303,7 @@ export default function BusinessPanel({ onDirty, onSaved }: Props) {
                   markDirty()
                 }}
                 autoUpload
-                heightClass="h-80"
+                heightClass="h-80 w-80"
                 hint="Square logo for your listing"
                 disabled={saving}
               />
@@ -316,7 +316,7 @@ export default function BusinessPanel({ onDirty, onSaved }: Props) {
                   markDirty()
                 }}
                 autoUpload
-                heightClass="h-80"
+                heightClass="h-80 w-80"
                 hint="Wide banner for your profile"
                 disabled={saving}
               />
@@ -353,6 +353,7 @@ export default function BusinessPanel({ onDirty, onSaved }: Props) {
                 }}
                 onChange={(next) => {
                   setBusinessLocation(next.locationName)
+                  setBusinessAddress(next.locationName)
                   setLatitude(next.latitude)
                   setLongitude(next.longitude)
                   markDirty()

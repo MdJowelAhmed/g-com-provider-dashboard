@@ -69,21 +69,29 @@ export function locationNameFromGeocoder(
   result: google.maps.GeocoderResult,
   fallback = '',
 ) {
-  const preferredTypes = [
+  // Prefer precise place-like components — never return only a coarse
+  // locality/district (that caused "Dhaka" / "Narayanganj District" while
+  // the map pin showed the actual POI like "Zinda Park").
+  const preciseTypes = [
     'establishment',
     'point_of_interest',
     'premise',
-    'neighborhood',
-    'sublocality',
-    'sublocality_level_1',
-    'locality',
-    'administrative_area_level_2',
+    'street_address',
     'route',
   ]
 
-  for (const type of preferredTypes) {
+  for (const type of preciseTypes) {
     const component = result.address_components?.find((item) => item.types.includes(type))
-    if (component?.long_name?.trim()) return component.long_name.trim()
+    if (!component?.long_name?.trim()) continue
+
+    if (type === 'route' || type === 'street_address') {
+      return result.formatted_address?.trim() || component.long_name.trim()
+    }
+    return component.long_name.trim()
+  }
+
+  if (result.formatted_address?.trim()) {
+    return result.formatted_address.trim()
   }
 
   const firstPart = result.formatted_address?.split(',')[0]?.trim()
@@ -93,10 +101,16 @@ export function locationNameFromGeocoder(
 }
 
 export function resolvePlaceName(place: google.maps.places.PlaceResult, typed = '') {
+  if (place.name?.trim() && place.formatted_address?.trim()) {
+    // Prefer "Name — Address" when both exist so the form matches the map pin.
+    const name = place.name.trim()
+    const formatted = place.formatted_address.trim()
+    if (formatted.toLowerCase().startsWith(name.toLowerCase())) return formatted
+    return `${name}, ${formatted}`
+  }
   if (place.name?.trim()) return place.name.trim()
+  if (place.formatted_address?.trim()) return place.formatted_address.trim()
   if (typed.trim()) return typed.trim()
-  const firstPart = place.formatted_address?.split(',')[0]?.trim()
-  if (firstPart) return firstPart
   return place.vicinity?.trim() || ''
 }
 
