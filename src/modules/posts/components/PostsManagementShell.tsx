@@ -128,8 +128,6 @@ export default function PostsManagementShell({
           ((postsApi.initialLoading || postsApi.isFetching) && Boolean(postsApi.searchTerm))
         }
         searchPlaceholder={`Search by panel, ${itemLabel.toLowerCase()}, or caption`}
-        statusFilter={postsApi.statusFilter}
-        onStatusChange={postsApi.setStatusFilter}
       />
 
       <AnimatePresence>

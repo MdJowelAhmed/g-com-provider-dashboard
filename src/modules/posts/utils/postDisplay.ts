@@ -1,5 +1,9 @@
 import type { CampaignDisplayStatus, Post, PostMedia } from '../types'
-import { getItemDisplayLabel, getPanelDisplayLabel } from './hubPostMapping'
+import {
+  getCategoryDisplayLabel,
+  getPanelDisplayLabel,
+  resolvePostItemLabel,
+} from './hubPostMapping'
 
 const VIDEO_EXTENSIONS = ['.mp4', '.mov', '.webm', '.mkv', '.avi', '.m4v', '.ogv', '.mpeg', '.mpg', '.3gp']
 
@@ -40,6 +44,7 @@ export function buildPostMedia(post: Post): PostMedia[] {
 
 export type PostDisplayRow = {
   panel: string
+  category: string
   itemLabel: string
   about: string
   amount: string
@@ -73,14 +78,18 @@ export function getCampaignDisplayStatus(
   return 'active'
 }
 
-export function getPostDisplayRow(post: Post): PostDisplayRow {
+export function getPostDisplayRow(
+  post: Post,
+  itemLabelById?: Map<string, string>,
+): PostDisplayRow {
   const media = buildPostMedia(post)
 
   return {
     panel: getPanelDisplayLabel(post.panel),
-    itemLabel: getItemDisplayLabel(post.itemId),
+    category: getCategoryDisplayLabel(post.category),
+    itemLabel: resolvePostItemLabel(post, itemLabelById),
     about: post.caption.trim(),
-    amount: Number.isFinite(post.itemPrice) ? post.itemPrice.toFixed(2) : '—',
+    amount: Number.isFinite(post.itemPrice) ? `GH₵ ${post.itemPrice.toFixed(2)}` : '—',
     startLocal: post.startDate,
     endLocal: post.endDate,
     campaignStatus: getCampaignDisplayStatus(post.startDate, post.endDate),

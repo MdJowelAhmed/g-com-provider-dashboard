@@ -3,10 +3,21 @@ import type { Role } from '../../../types/role'
 import type { Post, PostFormValues } from '../types'
 
 export const HUB_POST_PANEL_OPTIONS = [
-  { value: 'both', label: 'Hub & Business' },
+  { value: 'both', label: 'Both (Hub & Business)' },
   { value: 'hub', label: 'Hub only' },
   { value: 'business', label: 'Business only' },
 ] as const
+
+const CATEGORY_LABELS: Record<string, string> = {
+  stay: 'Stay',
+  shop: 'Shop',
+  shops: 'Shop',
+  dine: 'Dine',
+  event: 'Event',
+  events: 'Event',
+  service: 'Services',
+  services: 'Services',
+}
 
 function toDateInput(iso: string) {
   if (!iso) return ''
@@ -31,6 +42,7 @@ export function mapHubPostFromApi(doc: HubPostApiDoc, role: Role): Post {
     startDate: doc.startDate,
     endDate: doc.endDate,
     category: doc.category,
+    searchText: doc.searchText,
     likesCount: doc.likesCount ?? 0,
     commentCount: doc.commentCount ?? 0,
     shareCount: doc.shareCount ?? 0,
@@ -64,10 +76,26 @@ export function formValuesToHubPostPayload(values: PostFormValues): HubPostPaylo
   }
 }
 
+export function getCategoryDisplayLabel(category?: string) {
+  if (!category?.trim()) return '—'
+  return CATEGORY_LABELS[category.trim().toLowerCase()] ?? category
+}
+
+export function getPanelDisplayLabel(panel: Post['panel'] | string) {
+  const normalized = String(panel ?? '').trim().toLowerCase()
+  return HUB_POST_PANEL_OPTIONS.find((option) => option.value === normalized)?.label ?? panel
+}
+
 export function getItemDisplayLabel(itemId: string) {
   return formatItemLabel(itemId)
 }
 
-export function getPanelDisplayLabel(panel: Post['panel']) {
-  return HUB_POST_PANEL_OPTIONS.find((option) => option.value === panel)?.label ?? panel
+export function resolvePostItemLabel(
+  post: Pick<Post, 'itemId' | 'searchText'>,
+  itemLabelById?: Map<string, string>,
+) {
+  const fromCatalog = itemLabelById?.get(post.itemId)
+  if (fromCatalog) return fromCatalog
+  if (post.searchText?.trim()) return post.searchText.trim()
+  return getItemDisplayLabel(post.itemId)
 }

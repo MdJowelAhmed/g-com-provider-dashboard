@@ -8,7 +8,7 @@ import {
   useGetHubPostsQuery,
   useUpdateHubPostMutation,
 } from '../../../redux/api/hubPostApi'
-import { ALL_FILTER, DEFAULT_PAGE_SIZE } from '../constants'
+import { DEFAULT_PAGE_SIZE } from '../constants'
 import type { PostFormValues, SortDir, SortKey } from '../types'
 import { formValuesToHubPostPayload, mapHubPostFromApi } from '../utils/hubPostMapping'
 import {
@@ -59,7 +59,6 @@ export function usePosts(role: Role, serviceLabelById?: Map<string, string>) {
     flush,
     isDebouncing,
   } = useSearchField({ minChars: 2 })
-  const [statusFilter, setStatusFilter] = useState<string>(ALL_FILTER)
   const [sortKey, setSortKey] = useState<SortKey>('updatedAt')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
   const [page, setPage] = useState(1)
@@ -70,7 +69,6 @@ export function usePosts(role: Role, serviceLabelById?: Map<string, string>) {
     page: 1,
     limit: 100,
     ...(searchTerm ? { searchTerm } : {}),
-    ...(statusFilter !== ALL_FILTER ? { status: statusFilter } : {}),
   })
   const [createHubPost, { isLoading: isCreating }] = useCreateHubPostMutation()
   const [updateHubPost, { isLoading: isUpdating }] = useUpdateHubPostMutation()
@@ -78,7 +76,7 @@ export function usePosts(role: Role, serviceLabelById?: Map<string, string>) {
 
   useEffect(() => {
     setPage(1)
-  }, [searchTerm, statusFilter])
+  }, [searchTerm])
 
   const posts = useMemo(
     () => (data?.data ?? []).map((doc) => mapHubPostFromApi(doc, role)),
@@ -87,17 +85,15 @@ export function usePosts(role: Role, serviceLabelById?: Map<string, string>) {
 
   const sorted = useMemo(() => {
     return [...posts].sort((a, b) => {
-      const ra = getPostDisplayRow(a)
-      const rb = getPostDisplayRow(b)
+      const ra = getPostDisplayRow(a, serviceLabelById)
+      const rb = getPostDisplayRow(b, serviceLabelById)
       switch (sortKey) {
         case 'panel':
           return compareStrings(ra.panel, rb.panel, sortDir)
+        case 'category':
+          return compareStrings(ra.category, rb.category, sortDir)
         case 'itemId':
-          return compareStrings(
-            serviceLabelById?.get(a.itemId) ?? a.itemId,
-            serviceLabelById?.get(b.itemId) ?? b.itemId,
-            sortDir,
-          )
+          return compareStrings(ra.itemLabel, rb.itemLabel, sortDir)
         case 'about':
           return compareStrings(ra.about, rb.about, sortDir)
         case 'amount':
@@ -132,7 +128,11 @@ export function usePosts(role: Role, serviceLabelById?: Map<string, string>) {
     setSortKey((prev) => {
       if (prev !== key) {
         const ascFirst =
-          key === 'panel' || key === 'itemId' || key === 'about' || key === 'amount'
+          key === 'panel' ||
+          key === 'category' ||
+          key === 'itemId' ||
+          key === 'about' ||
+          key === 'amount'
         setSortDir(ascFirst ? 'asc' : 'desc')
         return key
       }
@@ -195,8 +195,6 @@ export function usePosts(role: Role, serviceLabelById?: Map<string, string>) {
     clearSearch,
     flush,
     isDebouncing,
-    statusFilter,
-    setStatusFilter,
     sortKey,
     sortDir,
     toggleSort,

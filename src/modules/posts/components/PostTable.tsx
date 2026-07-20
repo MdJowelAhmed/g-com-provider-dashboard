@@ -88,7 +88,7 @@ export default function PostTable({
   itemColumnLabel = 'Item',
   itemLabelById,
 }: Props) {
-  const colCount = 10
+  const colCount = 11
 
   return (
     <div className="overflow-hidden rounded-xl border border-surface-border bg-surface-card/95 shadow-[0_1px_0_0_rgba(255,255,255,0.03)_inset] backdrop-blur-sm">
@@ -116,6 +116,12 @@ export default function PostTable({
                 active={sortKey === 'panel'}
                 dir={sortDir}
                 onClick={() => onSort('panel')}
+              />
+              <SortTh
+                label="Category"
+                active={sortKey === 'category'}
+                dir={sortDir}
+                onClick={() => onSort('category')}
               />
               <SortTh
                 label={itemColumnLabel}
@@ -166,17 +172,17 @@ export default function PostTable({
               <tr>
                 <td colSpan={colCount} className="px-4 py-16 text-center">
                   <div className="mx-auto max-w-sm">
-                    <div className="text-sm font-medium text-gray-300">No posts match your filters</div>
-                    <p className="mt-1 text-xs text-gray-500">Try a different search or status, or create a new post.</p>
+                    <div className="text-sm font-medium text-gray-300">No posts found</div>
+                    <p className="mt-1 text-xs text-gray-500">Try a different search or create a new post.</p>
                   </div>
                 </td>
               </tr>
             ) : (
               posts.map((post) => {
-                const row = getPostDisplayRow(post)
+                const row = getPostDisplayRow(post, itemLabelById)
                 const thumb = row.media[0]
                 const selected = selectedIds.includes(post.id)
-                const itemLabel = itemLabelById?.get(post.itemId) ?? row.itemLabel
+                const itemLabel = row.itemLabel
                 const labelForA11y = row.about || itemLabel || 'post'
                 return (
                   <motion.tr
@@ -203,7 +209,12 @@ export default function PostTable({
                         {row.panel || '—'}
                       </div>
                     </td>
-                    <td className="max-w-[160px] px-3 py-3.5 align-middle">
+                    <td className="max-w-[100px] px-3 py-3.5 align-middle">
+                      <div className="truncate text-gray-300" title={row.category || undefined}>
+                        {row.category || '—'}
+                      </div>
+                    </td>
+                    <td className="max-w-[180px] px-3 py-3.5 align-middle">
                       <div className="truncate text-gray-200" title={itemLabel || undefined}>
                         {itemLabel || '—'}
                       </div>

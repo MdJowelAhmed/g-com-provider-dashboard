@@ -3,6 +3,7 @@ import { LogOut } from 'lucide-react'
 import type { NavItem, RoleMeta } from '../../config/roleConfig'
 import { useAuth } from '../../context/AuthContext'
 import { filterNavItemsForUser } from '../../modules/permissions/navFilter'
+import { resolveMediaUrl } from '../../redux/api/chatApi'
 import GcomLogo from '../auth/GcomLogo'
 
 type Props = {
@@ -10,17 +11,40 @@ type Props = {
   onLogout: () => void
 }
 
+function businessLogoUrl(url: string | undefined) {
+  if (!url?.trim()) return ''
+  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('blob:')) return url
+  if (url.startsWith('/')) return resolveMediaUrl(url)
+  return url
+}
+
 export default function Sidebar({ meta, onLogout }: Props) {
   const { user } = useAuth()
   const RoleIcon = meta.icon
   const navItems = user ? filterNavItemsForUser(meta.navItems, user) : meta.navItems
+  const isBusinessStaff =
+    user?.apiRole === 'business_staff' || user?.extra?.apiRole === 'business_staff'
+  const logoSrc = businessLogoUrl(user?.extra?.businessLogo)
+  const showBusinessLogo = isBusinessStaff && Boolean(logoSrc)
 
   return (
     <aside className="flex h-screen w-64 shrink-0 flex-col border-r border-surface-border bg-surface-sidebar">
       <div className="flex shrink-0 items-center gap-3 border-b border-surface-border px-5 py-5">
-        <GcomLogo className="h-10 w-10 rounded-lg" />
-        <div>
-          <div className="text-sm font-semibold text-white">G-com Provider</div>
+        {showBusinessLogo ? (
+          <img
+            src={logoSrc}
+            alt={user?.businessName || 'Business logo'}
+            className="h-10 w-10 shrink-0 rounded-lg border border-surface-border object-cover bg-surface-elevated"
+          />
+        ) : (
+          <GcomLogo className="h-10 w-10 rounded-lg" />
+        )}
+        <div className="min-w-0">
+          <div className="truncate text-sm font-semibold text-white">
+            {isBusinessStaff && user?.businessName
+              ? user.businessName
+              : 'G-com Provider'}
+          </div>
           <div className="flex items-center gap-1.5 text-xs text-accent-amber">
             <RoleIcon size={12} /> {meta.label}
           </div>

@@ -9,7 +9,7 @@ import {
 import type { RolePostConfig } from '../config/rolePostConfig'
 import { useHubPostItemCatalog } from '../hooks/useHubPostItemCatalog'
 import type { Post, PostFormValues } from '../types'
-import { HUB_POST_PANEL_OPTIONS, postToFormValues } from '../utils/hubPostMapping'
+import { HUB_POST_PANEL_OPTIONS, postToFormValues, resolvePostItemLabel } from '../utils/hubPostMapping'
 import { postFieldClass, postLabelClass, postTextareaClass } from './postFormFieldClasses'
 
 type Props = {
@@ -62,7 +62,7 @@ export default function PostFormModal({
       if (!exists) {
         options.unshift({
           value: initialPost.itemId,
-          label: `Unknown ${itemLabel.toLowerCase()} (${initialPost.itemId.slice(0, 8)}…)`,
+          label: resolvePostItemLabel(initialPost),
           price: initialPost.itemPrice,
         })
       }

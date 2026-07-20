@@ -1,7 +1,11 @@
 import { AUTH_STORAGE_KEYS } from './session'
 import { mapBusinessCategoryToRole, resolveRoleForMeta } from '../routing/roleRedirect'
+import { apiPermissionsToNav } from '../modules/controllers/permissionMapping'
+import { getAllowedNavPermissionIdsForRole } from '../modules/permissions/navPermissionMap'
 import type { UserProfile } from '../redux/api/authApi'
 import type { User } from '../types/user'
+
+const STAFF_KEYS_EXTRA = 'staff_permission_keys'
 
 export function mapUserProfileToUser(profile: UserProfile): User {
   const business = profile.business
@@ -23,6 +27,13 @@ export function mapUserProfileToUser(profile: UserProfile): User {
     for (const [key, value] of Object.entries(business.socialLinks)) {
       if (typeof value === 'string') extra[`social_${key}`] = value
     }
+  }
+
+  // Staff accounts only see sidebar items granted in businessStaffPermission.
+  if (profile.role === 'business_staff') {
+    const roleNavIds = getAllowedNavPermissionIdsForRole(tenantRole)
+    const navKeys = apiPermissionsToNav(profile.businessStaffPermission ?? [], roleNavIds)
+    extra[STAFF_KEYS_EXTRA] = JSON.stringify(navKeys)
   }
 
   return {

@@ -40,7 +40,7 @@ export default function PostDetailModal({
     return null
   }
 
-  const row = getPostDisplayRow(post)
+  const row = getPostDisplayRow(post, itemLabelById)
 
   return (
     <Modal
@@ -70,7 +70,7 @@ export default function PostDetailModal({
               {itemColumnLabel}
             </div>
             <div className="mt-1 text-gray-100">
-              {itemLabelById?.get(post.itemId) ?? post.itemId ?? '—'}
+              {row.itemLabel || '—'}
             </div>
           </div>
           <div className="rounded-lg border border-surface-border bg-surface-elevated/60 p-3">
@@ -79,7 +79,7 @@ export default function PostDetailModal({
           </div>
           <div className="rounded-lg border border-surface-border bg-surface-elevated/60 p-3">
             <div className="text-[11px] font-medium uppercase tracking-wide text-gray-500">Category</div>
-            <div className="mt-1 text-gray-100">{post.category || '—'}</div>
+            <div className="mt-1 text-gray-100">{row.category || '—'}</div>
           </div>
           <div className="rounded-lg border border-surface-border bg-surface-elevated/60 p-3">
             <div className="text-[11px] font-medium uppercase tracking-wide text-gray-500">Start</div>

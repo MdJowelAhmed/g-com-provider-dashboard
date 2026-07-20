@@ -109,6 +109,8 @@ export interface UserProfile {
     authProviders: string[];
     business: BusinessProfile | null;
     customer: unknown | null;
+    /** Present when `role` is `business_staff` — API permission enums for sidebar access. */
+    businessStaffPermission?: string[];
     createdAt: string;
     updatedAt: string;
     __v?: number;

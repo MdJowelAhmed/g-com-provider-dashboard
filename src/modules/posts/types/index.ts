@@ -23,6 +23,7 @@ export type Post = {
   startDate: string
   endDate: string
   category?: string
+  searchText?: string
   likesCount: number
   commentCount: number
   shareCount: number
@@ -33,6 +34,7 @@ export type Post = {
 
 export type SortKey =
   | 'panel'
+  | 'category'
   | 'itemId'
   | 'about'
   | 'amount'
