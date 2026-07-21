@@ -15,7 +15,7 @@ import {
   persistStoredUser,
   readStoredUser,
 } from '../auth/userProfile'
-import { normalizeUserRole } from '../routing/roleRedirect'
+import { normalizeUserRole, resolveRoleForMeta } from '../routing/roleRedirect'
 import { useGetMyProfileQuery } from '../redux/api/authApi'
 import type { RootState } from '../redux/store'
 import type { Role } from '../types/role'
@@ -71,6 +71,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const token =
     useSelector((state: RootState) => state.auth.token) ??
     (typeof localStorage !== 'undefined' ? localStorage.getItem('token') : null)
+  const authEmail = useSelector((state: RootState) => state.auth.email)
 
   const { data: profileResponse, isFetching: profileLoading } = useGetMyProfileQuery(
     undefined,
@@ -82,14 +83,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!profileResponse?.success || !profileResponse.data) return
+
     const mapped = mapUserProfileToUser(profileResponse.data)
-    persistStoredUser(mapped)
-    setUser(mapped)
-  }, [profileResponse])
+
+    // Ignore stale RTK cache from a previous account after login switch.
+    if (
+      authEmail &&
+      mapped.email.trim().toLowerCase() !== authEmail.trim().toLowerCase()
+    ) {
+      return
+    }
+
+    setUser((prev) => {
+      // Same account: keep current dashboard role so settings/page URL does not
+      // thrash when profile remaps (e.g. provider ↔ services).
+      const next: User =
+        prev && prev.id === mapped.id
+          ? {
+              ...mapped,
+              role: resolveRoleForMeta(String(prev.role || mapped.role)),
+            }
+          : {
+              ...mapped,
+              role: resolveRoleForMeta(String(mapped.role)),
+            }
+
+      persistStoredUser(next)
+      return next
+    })
+  }, [profileResponse, authEmail])
 
   const setUserFromProfile = useCallback((nextUser: User) => {
-    persistStoredUser(nextUser)
-    setUser(nextUser)
+    const normalized: User = {
+      ...nextUser,
+      role: resolveRoleForMeta(String(nextUser.role)),
+    }
+    persistStoredUser(normalized)
+    setUser(normalized)
   }, [])
 
   const login = useCallback((email: string) => {
@@ -152,7 +182,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         role:
           partial.role != null
             ? typeof partial.role === 'string'
-              ? partial.role
+              ? resolveRoleForMeta(partial.role)
               : (normalizeUserRole(partial.role) as Role)
             : prev.role,
         extra: partial.extra ? { ...prev.extra, ...partial.extra } : prev.extra,

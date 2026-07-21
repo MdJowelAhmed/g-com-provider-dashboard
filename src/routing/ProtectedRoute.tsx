@@ -1,7 +1,11 @@
-import { Navigate, Outlet, useParams } from 'react-router-dom'
+import { Navigate, Outlet, useLocation, useParams } from 'react-router-dom'
 import { useSelector } from 'react-redux'
 import { useAuth } from '../auth/useAuth'
-import { getDashboardPath, parseDashboardRoleParam } from './roleRedirect'
+import {
+  getDashboardPath,
+  parseDashboardRoleParam,
+  resolveRoleForMeta,
+} from './roleRedirect'
 import type { RootState } from '../redux/store'
 
 /**
@@ -9,28 +13,42 @@ import type { RootState } from '../redux/store'
  */
 export default function ProtectedRoute() {
   const { user } = useAuth()
+  const location = useLocation()
   const authRole = useSelector((state: RootState) => state.auth.role)
   const token = useSelector((state: RootState) => state.auth.token)
   const { role: roleSegment } = useParams<{ role: string }>()
 
-  const sessionRole = user?.role ?? authRole
+  const rawSessionRole = user?.role ?? authRole
 
   if (!token && !user) {
     return <Navigate to="/login" replace state={{ from: 'protected' }} />
   }
 
-  if (!sessionRole) {
+  if (!rawSessionRole) {
     return <Navigate to="/login" replace state={{ from: 'protected' }} />
   }
 
-  const urlRole = parseDashboardRoleParam(roleSegment)
+  // Normalize JWT roles like `provider` and URL/tenant roles like `services`
+  // so a remap does not kick the user from `/settings` to overview.
+  const sessionRole = resolveRoleForMeta(String(rawSessionRole))
+  const urlRoleRaw = parseDashboardRoleParam(roleSegment)
+  const urlRole = urlRoleRaw ? resolveRoleForMeta(urlRoleRaw) : null
 
-  if (roleSegment && urlRole === null) {
+  if (roleSegment && urlRoleRaw === null) {
     return <Navigate to={getDashboardPath(sessionRole)} replace />
   }
 
   if (urlRole !== null && urlRole !== sessionRole) {
-    return <Navigate to={getDashboardPath(sessionRole)} replace />
+    // Keep the current tab (e.g. /settings) when correcting the role segment.
+    const suffix = roleSegment
+      ? location.pathname.slice(`/dashboard/${roleSegment}`.length)
+      : ''
+    return (
+      <Navigate
+        to={`${getDashboardPath(sessionRole)}${suffix}${location.search}`}
+        replace
+      />
+    )
   }
 
   return <Outlet />

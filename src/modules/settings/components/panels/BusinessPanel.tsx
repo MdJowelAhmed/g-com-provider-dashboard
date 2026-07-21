@@ -11,7 +11,6 @@ import {
   supportLabelClass,
   supportTextareaClass,
 } from '../../../../components/dashboard/support/supportFieldClasses'
-import { mapUserProfileToUser } from '../../../../auth/userProfile'
 import { useAuth } from '../../../../context/AuthContext'
 import { resolveMediaUrl } from '../../../../redux/api/chatApi'
 import {
@@ -19,7 +18,6 @@ import {
   type DeliveryMethodValue,
   useBusinessInformationMutation,
   useGetMyProfileQuery,
-  useLazyGetMyProfileQuery,
 } from '../../../../redux/api/authApi'
 import { BUSINESS_MAIN_CATEGORIES } from '../../../../types/businessCategory'
 import SettingsCard from '../SettingsCard'
@@ -55,9 +53,8 @@ function supportsDeliveryMethods(category?: string) {
 }
 
 export default function BusinessPanel({ onDirty, onSaved }: Props) {
-  const { setUserFromProfile } = useAuth()
+  const { updateUser } = useAuth()
   const { data: profileResponse, isLoading } = useGetMyProfileQuery()
-  const [fetchProfile] = useLazyGetMyProfileQuery()
   const [businessInformation, { isLoading: saving }] = useBusinessInformationMutation()
   const locationPickerRef = useRef<GoogleMapLocationPickerRef>(null)
 
@@ -159,10 +156,23 @@ export default function BusinessPanel({ onDirty, onSaved }: Props) {
         businessPhone: businessPhone.trim(),
       }).unwrap()
 
-      const profileRes = await fetchProfile().unwrap()
-      if (profileRes.success && profileRes.data) {
-        setUserFromProfile(mapUserProfileToUser(profileRes.data))
-      }
+      // Keep current dashboard role — remapping via setUserFromProfile caused
+      // ProtectedRoute to kick non-stay roles from /settings to overview.
+      updateUser({
+        businessName: businessName.trim(),
+        phone: businessPhone.trim(),
+        address: businessAddress.trim() || resolvedLocation,
+        extra: {
+          description: description.trim() || businessName.trim(),
+          category: category.trim(),
+          businessLocation: resolvedLocation,
+          businessLogo: businessLogo.trim(),
+          coverImage: coverImage.trim(),
+          social_facebook: facebook.trim(),
+          social_instagram: instagram.trim(),
+          social_linkedin: linkedin.trim(),
+        },
+      })
 
       onSaved()
       setOk(true)

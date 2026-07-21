@@ -7,10 +7,12 @@ import AuthIllustration from '../../components/auth/AuthIllustration'
 import FormField from '../../components/auth/FormField'
 import PasswordField from '../../components/auth/PasswordField'
 import PrimaryButton from '../../components/auth/PrimaryButton'
-import { mapUserProfileToUser } from '../../auth/userProfile'
+import { mapUserProfileToUser, clearStoredUser } from '../../auth/userProfile'
 import { useAuth } from '../../context/AuthContext'
 import { useLazyGetMyProfileQuery, useLoginMutation } from '../../redux/api/authApi'
-import { getDashboardPath } from '../../routing/roleRedirect'
+import { baseApi } from '../../redux/api/baseApi'
+import { getDashboardPath, resolveRoleForMeta } from '../../routing/roleRedirect'
+import { useDispatch } from 'react-redux'
 
 function getLoginErrorMessage(error: unknown): string {
   if (error && typeof error === 'object' && 'data' in error) {
@@ -25,6 +27,7 @@ function getLoginErrorMessage(error: unknown): string {
 
 export default function Login() {
   const navigate = useNavigate()
+  const dispatch = useDispatch()
   const { setUserFromProfile } = useAuth()
   const [login, { isLoading: loggingIn }] = useLoginMutation()
   const [fetchProfile, { isFetching: loadingProfile }] = useLazyGetMyProfileQuery()
@@ -39,6 +42,10 @@ export default function Login() {
     setError(null)
 
     try {
+      // Drop previous account cache so AuthContext cannot re-apply stale profile.
+      clearStoredUser()
+      dispatch(baseApi.util.resetApiState())
+
       await login({
         email: email.trim(),
         password,
@@ -52,7 +59,7 @@ export default function Login() {
 
       const user = mapUserProfileToUser(profileResponse.data)
       setUserFromProfile(user)
-      navigate(getDashboardPath(user.role), { replace: true })
+      navigate(getDashboardPath(resolveRoleForMeta(String(user.role))), { replace: true })
     } catch (err) {
       setError(getLoginErrorMessage(err))
     }

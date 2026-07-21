@@ -13,12 +13,12 @@ import LegalDocumentPage from './pages/dashboard/legal/LegalDocumentPage'
 import ProtectedRoute from './routing/ProtectedRoute'
 import { readStoredUser } from './auth/userProfile'
 import { decodeJwtPayload } from './auth/jwt'
-import { getDashboardPath } from './routing/roleRedirect'
+import { getDashboardPath, resolveRoleForMeta } from './routing/roleRedirect'
 
 function DashboardRedirect() {
   const storedUser = readStoredUser()
   if (storedUser?.role) {
-    return <Navigate to={getDashboardPath(storedUser.role)} replace />
+    return <Navigate to={getDashboardPath(resolveRoleForMeta(String(storedUser.role)))} replace />
   }
 
   const token = localStorage.getItem('token')
@@ -27,7 +27,7 @@ function DashboardRedirect() {
   const claims = decodeJwtPayload(token)
   if (!claims?.role) return <Navigate to="/login" replace />
 
-  return <Navigate to={getDashboardPath(claims.role)} replace />
+  return <Navigate to={getDashboardPath(resolveRoleForMeta(claims.role))} replace />
 }
 
 export default function App() {
