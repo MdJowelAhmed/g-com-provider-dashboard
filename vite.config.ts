@@ -13,4 +13,5 @@ export default defineConfig({
     host: true,
    
   },
+  preview: {     port: 4174,     allowedHosts: ['business.gcomapp.com'],   },
 })
