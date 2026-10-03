@@ -1,6 +1,8 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { useCallback, useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../../context/AuthContext'
+import { isOnboardingComplete } from '../../../routing/roleRedirect'
 import SettingsHeroHeader from '../../../modules/settings/components/SettingsHeroHeader'
 import SettingsTabList from '../../../modules/settings/components/SettingsTabList'
 import BusinessPanel from '../../../modules/settings/components/panels/BusinessPanel'
@@ -31,7 +33,18 @@ function SettingsSkeleton() {
 
 export default function SettingsPage() {
   const { user, updateUser } = useAuth()
-  const [tab, setTab] = useState<SettingsTabId>('personal')
+  const [searchParams] = useSearchParams()
+  const tabParam = searchParams.get('tab') as SettingsTabId | null
+
+  const [tab, setTab] = useState<SettingsTabId>(() => {
+    if (tabParam && ['personal', 'business', 'documents', 'security'].includes(tabParam)) {
+      return tabParam
+    }
+    if (!isOnboardingComplete(user)) {
+      return 'business'
+    }
+    return 'personal'
+  })
   const [ready, setReady] = useState(false)
 
   useEffect(() => {

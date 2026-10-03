@@ -11,7 +11,7 @@ import { mapUserProfileToUser, clearStoredUser } from '../../auth/userProfile'
 import { useAuth } from '../../context/AuthContext'
 import { useLazyGetMyProfileQuery, useLoginMutation } from '../../redux/api/authApi'
 import { baseApi } from '../../redux/api/baseApi'
-import { getDashboardPath, resolveRoleForMeta } from '../../routing/roleRedirect'
+import { getPostLoginRedirectPath } from '../../routing/roleRedirect'
 import { useDispatch } from 'react-redux'
 
 function getLoginErrorMessage(error: unknown): string {
@@ -42,7 +42,6 @@ export default function Login() {
     setError(null)
 
     try {
-      // Drop previous account cache so AuthContext cannot re-apply stale profile.
       clearStoredUser()
       dispatch(baseApi.util.resetApiState())
 
@@ -59,7 +58,7 @@ export default function Login() {
 
       const user = mapUserProfileToUser(profileResponse.data)
       setUserFromProfile(user)
-      navigate(getDashboardPath(resolveRoleForMeta(String(user.role))), { replace: true })
+      navigate(getPostLoginRedirectPath(user), { replace: true })
     } catch (err) {
       setError(getLoginErrorMessage(err))
     }

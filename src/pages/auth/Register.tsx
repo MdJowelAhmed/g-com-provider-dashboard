@@ -1,62 +1,19 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import type { FetchBaseQueryError } from '@reduxjs/toolkit/query'
-import type { IconType } from 'react-icons'
-import { FaFacebook, FaInstagram, FaLinkedinIn } from 'react-icons/fa'
 import AuthLayout from '../../layouts/AuthLayout'
 import AuthCard from '../../components/auth/AuthCard'
 import FormField from '../../components/auth/FormField'
-import FormSelect from '../../components/auth/FormSelect'
-import FormTextarea from '../../components/auth/FormTextarea'
 import PasswordField from '../../components/auth/PasswordField'
 import PrimaryButton from '../../components/auth/PrimaryButton'
-import ImageUploader from '../../components/common/ImageUploader'
-import GoogleMapLocationPicker, {
-  type GoogleMapLocationPickerRef,
-} from '../../components/common/GoogleMapLocationPicker'
-import { mapUserProfileToUser } from '../../auth/userProfile'
-import { useAuth } from '../../context/AuthContext'
-import { getDashboardPath } from '../../routing/roleRedirect'
+import BusinessOnboardingForm from '../../components/auth/BusinessOnboardingForm'
 import {
-  DELIVERY_METHOD,
-  DELIVERY_METHOD_OPTIONS,
-  type DeliveryMethodValue,
-  useBusinessInformationMutation,
   useBusinessRegisterMutation,
-  useLazyGetMyProfileQuery,
   useResentOtpMutation,
   useVerifyEmailMutation,
 } from '../../redux/api/authApi'
 
-type SocialKey = 'instagram' | 'facebook' | 'linkedin'
-
 const OTP_LENGTH = 6
-
-const CATEGORY_OPTIONS = [
-  { value: 'services', label: 'Services' },
-  { value: 'stay', label: 'Stay' },
-  { value: 'dine', label: 'Dine' },
-  { value: 'shop', label: 'Shop' },
-  { value: 'event', label: 'Events' },
-]
-
-const SOCIAL_META: Record<SocialKey, { label: string; placeholder: string; icon: IconType }> = {
-  instagram: {
-    label: 'Instagram',
-    placeholder: 'Link to your Instagram page…',
-    icon: FaInstagram,
-  },
-  facebook: {
-    label: 'Facebook',
-    placeholder: 'Link to your Facebook page…',
-    icon: FaFacebook,
-  },
-  linkedin: {
-    label: 'LinkedIn',
-    placeholder: 'Link to your LinkedIn page…',
-    icon: FaLinkedinIn,
-  },
-}
 
 function getAuthApiErrorMessage(error: unknown, fallback: string) {
   if (error && typeof error === 'object' && 'data' in error) {
@@ -74,9 +31,6 @@ function getAuthApiErrorMessage(error: unknown, fallback: string) {
 }
 
 export default function Register() {
-  const navigate = useNavigate()
-  const { setUserFromProfile } = useAuth()
-
   const [step, setStep] = useState(1)
   const [error, setError] = useState<string | null>(null)
 
@@ -89,36 +43,13 @@ export default function Register() {
     Array.from({ length: OTP_LENGTH }, () => ''),
   )
   const otpInputRefs = useRef<Array<HTMLInputElement | null>>([])
-  const locationPickerRef = useRef<GoogleMapLocationPickerRef>(null)
-
-  const [businessName, setBusinessName] = useState('')
-  const [category, setCategory] = useState('')
-  const [description, setDescription] = useState('')
-  const [activeSocial, setActiveSocial] = useState<SocialKey>('instagram')
-  const [socialLinks, setSocialLinks] = useState<Record<SocialKey, string>>({
-    instagram: '',
-    facebook: '',
-    linkedin: '',
-  })
-  const [businessPhone, setBusinessPhone] = useState('')
-  const [deliveryMethods, setDeliveryMethods] = useState<DeliveryMethodValue[]>([
-    DELIVERY_METHOD.PICKUP,
-  ])
-  const [businessAddress, setBusinessAddress] = useState('')
-  const [businessLocation, setBusinessLocation] = useState('')
-  const [latitude, setLatitude] = useState<number | null>(null)
-  const [longitude, setLongitude] = useState<number | null>(null)
-  const [businessLogo, setBusinessLogo] = useState('')
-  const [coverImage, setCoverImage] = useState('')
 
   const [businessRegister, { isLoading: registering }] = useBusinessRegisterMutation()
   const [verifyEmail, { isLoading: verifyingEmail }] = useVerifyEmailMutation()
   const [resendOtp, { isLoading: resendingOtp }] = useResentOtpMutation()
-  const [businessInformation, { isLoading: savingInfo }] = useBusinessInformationMutation()
-  const [fetchProfile] = useLazyGetMyProfileQuery()
 
   const otp = useMemo(() => otpDigits.join(''), [otpDigits])
-  const busy = registering || verifyingEmail || resendingOtp || savingInfo
+  const busy = registering || verifyingEmail || resendingOtp
 
   useEffect(() => {
     if (step === 2) {
@@ -226,79 +157,6 @@ export default function Register() {
       await resendOtp({ email: email.trim() }).unwrap()
     } catch (err) {
       setError(getAuthApiErrorMessage(err, 'Could not resend code. Please try again.'))
-    }
-  }
-
-  const submitBusinessInfo = async (e: FormEvent) => {
-    e.preventDefault()
-    setError(null)
-
-    if (!businessName.trim() || !category) {
-      setError('Business name and category are required.')
-      return
-    }
-    if (!businessPhone.trim()) {
-      setError('Business phone number is required.')
-      return
-    }
-    if (deliveryMethods.length === 0) {
-      setError('Select at least one delivery method.')
-      return
-    }
-    if (!businessLogo.trim() || !coverImage.trim()) {
-      setError('Please upload both a logo and a cover photo.')
-      return
-    }
-
-    let resolvedLocation = businessLocation.trim()
-    let lat = latitude
-    let lng = longitude
-
-    if (!resolvedLocation || lat == null || lng == null) {
-      const resolved = await locationPickerRef.current?.resolveLocation()
-      if (!resolved) {
-        setError('Please enter a valid business location on the map.')
-        return
-      }
-      resolvedLocation = resolved.locationName
-      lat = resolved.latitude
-      lng = resolved.longitude
-      setBusinessLocation(resolvedLocation)
-      setLatitude(lat)
-      setLongitude(lng)
-    }
-
-    try {
-      await businessInformation({
-        businessName: businessName.trim(),
-        description: description.trim() || businessName.trim(),
-        category,
-        socialLinks: {
-          facebook: socialLinks.facebook.trim() || undefined,
-          instagram: socialLinks.instagram.trim() || undefined,
-          linkedin: socialLinks.linkedin.trim() || undefined,
-        },
-        coverImage: coverImage.trim(),
-        businessLogo: businessLogo.trim(),
-        businessAddress: businessAddress.trim() || resolvedLocation,
-        businessLocation: resolvedLocation,
-        deliveryMethods,
-        latitude: lat,
-        longitude: lng,
-        businessPhone: businessPhone.trim(),
-      }).unwrap()
-
-      const profileResponse = await fetchProfile().unwrap()
-      if (profileResponse.success && profileResponse.data) {
-        const user = mapUserProfileToUser(profileResponse.data)
-        setUserFromProfile(user)
-        navigate(getDashboardPath(user.role), { replace: true })
-        return
-      }
-
-      navigate('/login', { replace: true })
-    } catch (err) {
-      setError(getAuthApiErrorMessage(err, 'Failed to save business information.'))
     }
   }
 
@@ -414,175 +272,15 @@ export default function Register() {
     )
   }
 
-  const ActiveSocialIcon = SOCIAL_META[activeSocial].icon
-
   return (
     <AuthLayout>
-      <AuthCard title="Business Information" bordered>
-        <form onSubmit={submitBusinessInfo} className="space-y-4">
-          <FormField
-            label="Business Name"
-            value={businessName}
-            onChange={(e) => setBusinessName(e.target.value)}
-            placeholder="Enter your Business name"
-            required
-            disabled={busy}
-          />
-
-          <FormSelect
-            label="Category"
-            optionItems={CATEGORY_OPTIONS}
-            placeholderOption="Select a category"
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            required
-            disabled={busy}
-          />
-
-          <FormTextarea
-            label="Description"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Describe your business"
-            disabled={busy}
-          />
-
-          <div>
-            <span className="block text-sm font-medium text-white">Social Media Links</span>
-            <div className="mt-2 flex gap-2">
-              {(Object.keys(SOCIAL_META) as SocialKey[]).map((key) => {
-                const Icon = SOCIAL_META[key].icon
-                const active = activeSocial === key
-                return (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => setActiveSocial(key)}
-                    className={`flex h-10 w-10 items-center justify-center rounded-lg border transition ${
-                      active
-                        ? 'border-white bg-white text-gray-900'
-                        : 'border-surface-border bg-surface-elevated text-gray-300 hover:border-brand/40'
-                    }`}
-                    title={SOCIAL_META[key].label}
-                  >
-                    <Icon size={18} />
-                  </button>
-                )
-              })}
-            </div>
-            <div className="relative mt-2">
-              <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-gray-500">
-                <ActiveSocialIcon size={16} />
-              </div>
-              <input
-                type="url"
-                value={socialLinks[activeSocial]}
-                onChange={(e) =>
-                  setSocialLinks((prev) => ({ ...prev, [activeSocial]: e.target.value }))
-                }
-                placeholder={SOCIAL_META[activeSocial].placeholder}
-                disabled={busy}
-                className="h-11 w-full rounded-md bg-white py-2 pl-10 pr-3 text-gray-900 placeholder:text-gray-400 outline-none focus:ring-2 focus:ring-brand-ring"
-              />
-            </div>
-          </div>
-
-          <FormField
-            label="Phone Number"
-            type="tel"
-            value={businessPhone}
-            onChange={(e) => setBusinessPhone(e.target.value)}
-            placeholder="Enter Business Phone Number"
-            required
-            disabled={busy}
-          />
-
-          <div>
-            <span className="block text-sm font-medium text-white">
-              Delivery methods<span className="ml-1 text-accent-amber">*</span>
-            </span>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {DELIVERY_METHOD_OPTIONS.map((option) => {
-                const active = deliveryMethods.includes(option.value)
-                return (
-                  <button
-                    key={option.value}
-                    type="button"
-                    disabled={busy}
-                    onClick={() =>
-                      setDeliveryMethods((prev) =>
-                        active
-                          ? prev.filter((v) => v !== option.value)
-                          : [...prev, option.value],
-                      )
-                    }
-                    className={`rounded-lg border px-3 py-2 text-xs font-medium transition ${
-                      active
-                        ? 'border-brand bg-brand/15 text-white ring-1 ring-brand/40'
-                        : 'border-surface-border text-gray-400 hover:border-brand/40 hover:text-gray-100'
-                    }`}
-                  >
-                    {option.label}
-                  </button>
-                )
-              })}
-            </div>
-            <p className="mt-1.5 text-xs text-gray-500">Select at least one option.</p>
-          </div>
-
-          <FormField
-            label="Address"
-            value={businessAddress}
-            onChange={(e) => setBusinessAddress(e.target.value)}
-            placeholder="Enter business address"
-            disabled={busy}
-          />
-
-          <div>
-            <span className="block text-sm font-medium text-white">Location</span>
-            <div className="mt-2">
-              <GoogleMapLocationPicker
-                ref={locationPickerRef}
-                value={{
-                  locationName: businessLocation,
-                  latitude,
-                  longitude,
-                }}
-                onChange={(value) => {
-                  setBusinessLocation(value.locationName)
-                  setLatitude(value.latitude)
-                  setLongitude(value.longitude)
-                }}
-                disabled={busy}
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-[120px_1fr] gap-3">
-            <ImageUploader
-              label="Upload Logo"
-              value={businessLogo}
-              onChange={setBusinessLogo}
-              autoUpload
-              heightClass="h-[120px]"
-              disabled={busy}
-            />
-            <ImageUploader
-              label="Upload Cover Photo"
-              value={coverImage}
-              onChange={setCoverImage}
-              autoUpload
-              heightClass="h-[120px]"
-              disabled={busy}
-            />
-          </div>
-
-          {error ? <p className="text-xs text-accent-danger">{error}</p> : null}
-
-          <PrimaryButton type="submit" disabled={busy}>
-            {savingInfo ? 'Saving…' : 'Complete registration'}
-          </PrimaryButton>
-        </form>
+      <AuthCard
+        title="Business Information"
+        description="Complete your business profile and select your category to continue."
+        bordered
+        maxWidthClass="max-w-4xl"
+      >
+        <BusinessOnboardingForm submitLabel="Complete registration" />
       </AuthCard>
     </AuthLayout>
   )
