@@ -1,5 +1,6 @@
 import type { Role } from '../types/role'
 import { ROLES } from '../types/role'
+import type { User } from '../types/user'
 import { dashboardPathForRole } from './routeConfig'
 
 /** Legacy URLs / storage used `service`; canonical role is `services`. */
@@ -56,3 +57,23 @@ export function isRoleMismatch(urlRole: string | null, userRole: string): boolea
 export function normalizeUserRole(raw: unknown): Role {
   return migrateRoleKey(raw) ?? 'services'
 }
+
+/** Check if user has completed business onboarding (category & businessName filled out). */
+export function isOnboardingComplete(
+  user: { extra?: Record<string, string>; businessName?: string } | null | undefined
+): boolean {
+  if (!user) return false
+  const category = user.extra?.category?.trim()
+  const businessName = user.businessName?.trim()
+  return Boolean(category && businessName)
+}
+
+/** Returns the post-login destination: onboarding page if incomplete, otherwise role dashboard. */
+export function getPostLoginRedirectPath(user: User): string {
+  if (!isOnboardingComplete(user)) {
+    return '/onboarding'
+  }
+  const role = resolveRoleForMeta(String(user.role))
+  return getDashboardPath(role)
+}
+

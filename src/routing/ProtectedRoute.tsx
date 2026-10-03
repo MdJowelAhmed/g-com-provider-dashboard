@@ -3,6 +3,7 @@ import { useSelector } from 'react-redux'
 import { useAuth } from '../auth/useAuth'
 import {
   getDashboardPath,
+  isOnboardingComplete,
   parseDashboardRoleParam,
   resolveRoleForMeta,
 } from './roleRedirect'
@@ -31,6 +32,14 @@ export default function ProtectedRoute() {
   // Normalize JWT roles like `provider` and URL/tenant roles like `services`
   // so a remap does not kick the user from `/settings` to overview.
   const sessionRole = resolveRoleForMeta(String(rawSessionRole))
+
+  // If user onboarding is incomplete (e.g. category missing), force them to onboarding page
+  if (user && !isOnboardingComplete(user)) {
+    if (!location.pathname.startsWith('/onboarding')) {
+      return <Navigate to="/onboarding" replace />
+    }
+  }
+
   const urlRoleRaw = parseDashboardRoleParam(roleSegment)
   const urlRole = urlRoleRaw ? resolveRoleForMeta(urlRoleRaw) : null
 

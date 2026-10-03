@@ -5,6 +5,7 @@ import ForgotPassword from './pages/auth/ForgotPassword'
 import VerifyEmail from './pages/auth/VerifyEmail'
 import SetNewPassword from './pages/auth/SetNewPassword'
 import PasswordResetSuccess from './pages/auth/PasswordResetSuccess'
+import Onboarding from './pages/auth/Onboarding'
 import DashboardLayout from './layouts/DashboardLayout'
 import Overview from './pages/dashboard/Overview'
 import ListPage from './pages/dashboard/ListPage'
@@ -13,12 +14,12 @@ import LegalDocumentPage from './pages/dashboard/legal/LegalDocumentPage'
 import ProtectedRoute from './routing/ProtectedRoute'
 import { readStoredUser } from './auth/userProfile'
 import { decodeJwtPayload } from './auth/jwt'
-import { getDashboardPath, resolveRoleForMeta } from './routing/roleRedirect'
+import { getPostLoginRedirectPath, resolveRoleForMeta, getDashboardPath } from './routing/roleRedirect'
 
 function DashboardRedirect() {
   const storedUser = readStoredUser()
-  if (storedUser?.role) {
-    return <Navigate to={getDashboardPath(resolveRoleForMeta(String(storedUser.role)))} replace />
+  if (storedUser) {
+    return <Navigate to={getPostLoginRedirectPath(storedUser)} replace />
   }
 
   const token = localStorage.getItem('token')
@@ -37,6 +38,7 @@ export default function App() {
 
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
+      <Route path="/onboarding" element={<Onboarding />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/verify-email" element={<VerifyEmail />} />
       <Route path="/reset-password" element={<SetNewPassword />} />

@@ -6,6 +6,7 @@ type Props = {
   description?: ReactNode
   children: ReactNode
   bordered?: boolean
+  maxWidthClass?: string
 }
 
 export default function AuthCard({
@@ -13,10 +14,11 @@ export default function AuthCard({
   description,
   children,
   bordered = false,
+  maxWidthClass = 'max-w-[440px]',
 }: Props) {
   return (
     <div
-      className={`w-full max-w-[440px] rounded-2xl bg-surface-card p-8 shadow-2xl ${
+      className={`w-full ${maxWidthClass} rounded-2xl bg-surface-card p-8 shadow-2xl transition-all ${
         bordered ? 'border border-brand' : ''
       }`}
     >
