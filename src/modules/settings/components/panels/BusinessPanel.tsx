@@ -77,6 +77,7 @@ export default function BusinessPanel({ onDirty, onSaved }: Props) {
   const profile = profileResponse?.data
   const business = profile?.business
   const showDeliveryMethods = supportsDeliveryMethods(category)
+  const isCategoryReadOnly = Boolean(business?.category?.trim())
 
   useEffect(() => {
     if (!business) return
@@ -254,8 +255,18 @@ export default function BusinessPanel({ onDirty, onSaved }: Props) {
                 <input
                   id="set-biz-category"
                   value={category}
-                  readOnly
-                  className={`${supportInputClass} cursor-not-allowed capitalize opacity-70`}
+                  onChange={(e) => {
+                    setCategory(e.target.value)
+                    markDirty()
+                  }}
+                  readOnly={isCategoryReadOnly}
+                  disabled={saving}
+                  placeholder="Business category"
+                  className={
+                    isCategoryReadOnly
+                      ? `${supportInputClass} cursor-not-allowed capitalize opacity-70`
+                      : supportInputClass
+                  }
                 />
               </div>
 
