@@ -33,7 +33,7 @@ type SocialKey = 'instagram' | 'facebook' | 'linkedin'
 const OTP_LENGTH = 6
 
 const CATEGORY_OPTIONS = [
-  { value: 'service', label: 'Services' },
+  { value: 'services', label: 'Services' },
   { value: 'stay', label: 'Stay' },
   { value: 'dine', label: 'Dine' },
   { value: 'shop', label: 'Shop' },

@@ -315,7 +315,7 @@ export default function RoomFormDrawer({
             <Form.Item
               name="subCategory"
               label="Sub category"
-              rules={[{ required: true, message: 'Select a sub category' }]}
+              // rules={[{ required: true, message: 'Select a sub category' }]}
             >
               <Select
                 showSearch
